@@ -63,7 +63,9 @@ class _MediaToolPageState extends ConsumerState<MediaToolPage> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  uri != null ? 'Saved: $uri' : 'Done: ${next.outputPath}',
+                  uri != null
+                      ? 'Saved: $uri'
+                      : 'Encoded but gallery save failed: ${next.outputPath}',
                 ),
               ),
             );

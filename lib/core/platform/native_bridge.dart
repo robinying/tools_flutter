@@ -2,18 +2,13 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 
 class NativeBridge {
-  static const _ffmpeg = MethodChannel('com.robin.tools/ffmpeg');
+  // Raw FFmpeg channel removed — use [startMediaJob] only (typed jobs + path policy).
   static const _job = MethodChannel('com.robin.tools/media_job');
   static const _jobEvents = EventChannel('com.robin.tools/media_events');
   static const _light = MethodChannel('com.robin.tools/light_sensor');
   static const _lightEvents = EventChannel('com.robin.tools/light_sensor_events');
   static const _ebook = MethodChannel('com.robin.tools/ebook');
   static const _gallery = MethodChannel('com.robin.tools/gallery');
-
-  static Future<Map<String, dynamic>> runFfmpeg(List<String> args) async {
-    final r = await _ffmpeg.invokeMethod('run', {'args': args});
-    return Map<String, dynamic>.from(r as Map);
-  }
 
   static Future<void> startMediaJob({
     required String type,

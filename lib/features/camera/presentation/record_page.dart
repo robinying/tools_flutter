@@ -23,15 +23,35 @@ class _RecordPageState extends ConsumerState<RecordPage> {
   }
 
   Future<void> _init() async {
-    await Permission.camera.request();
-    await Permission.microphone.request();
+    final cam = await Permission.camera.request();
+    final mic = await Permission.microphone.request();
+    if (!cam.isGranted) {
+      setState(() => _error = 'Camera permission denied');
+      return;
+    }
+    if (!mic.isGranted) {
+      setState(() => _error = 'Microphone permission denied');
+      return;
+    }
     try {
       final cams = await availableCameras();
-      final c = CameraController(cams.first, ResolutionPreset.high, enableAudio: true);
+      if (cams.isEmpty) {
+        setState(() => _error = 'No camera');
+        return;
+      }
+      final c = CameraController(
+        cams.first,
+        ResolutionPreset.high,
+        enableAudio: true,
+      );
       await c.initialize();
-      if (mounted) setState(() => _controller = c);
+      if (!mounted) {
+        await c.dispose();
+        return;
+      }
+      setState(() => _controller = c);
     } catch (e) {
-      setState(() => _error = '$e');
+      if (mounted) setState(() => _error = e.toString());
     }
   }
 

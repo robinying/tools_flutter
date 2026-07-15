@@ -19,9 +19,13 @@ final appRouter = GoRouter(
     GoRoute(path: '/media', builder: (_, __) => const MediaHomePage()),
     GoRoute(
       path: '/media/tool/:type',
-      builder: (_, state) => MediaToolPage(
-        type: MediaToolType.fromId(state.pathParameters['type']!),
-      ),
+      builder: (_, state) {
+        final type = MediaToolType.tryParse(state.pathParameters['type']);
+        if (type == null) {
+          return const MediaHomePage();
+        }
+        return MediaToolPage(type: type);
+      },
     ),
     GoRoute(path: '/camera', builder: (_, __) => const CameraHomePage()),
     GoRoute(path: '/camera/photo', builder: (_, __) => const PhotoPage()),

@@ -1,5 +1,6 @@
 package com.robin.tools_flutter
 
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -9,13 +10,12 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import android.content.ContentValues
 import android.util.Log
 import com.arthenica.ffmpegkit.FFmpegKit
-import com.arthenica.ffmpegkit.ReturnCode
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -33,50 +33,16 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CH_FFMPEG)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "run" -> {
-                        @Suppress("UNCHECKED_CAST")
-                        val args = call.argument<List<String>>("args") ?: emptyList()
-                        executor.execute {
-                            try {
-                                val session = FFmpegKit.executeWithArguments(args.toTypedArray())
-                                val ok = ReturnCode.isSuccess(session.returnCode)
-                                runOnUiThread {
-                                    if (ok) result.success(
-                                        mapOf(
-                                            "ok" to true,
-                                            "logs" to (session.allLogsAsString ?: "")
-                                        )
-                                    ) else result.success(
-                                        mapOf(
-                                            "ok" to false,
-                                            "logs" to (session.allLogsAsString ?: "ffmpeg failed"),
-                                            "code" to (session.returnCode?.value ?: -1)
-                                        )
-                                    )
-                                }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "ffmpeg", e)
-                                runOnUiThread {
-                                    result.error("FFMPEG", e.message, null)
-                                }
-                            }
-                        }
-                    }
-                    "cancel" -> {
-                        FFmpegKit.cancel()
-                        result.success(true)
-                    }
-                    else -> result.notImplemented()
-                }
-            }
+        // Raw FFmpeg channel removed (open args surface). Use media_job only.
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CH_MEDIA_JOB)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "start" -> {
+                        if (MediaJobService.isJobRunning()) {
+                            result.error("BUSY", "Another job is running", null)
+                            return@setMethodCallHandler
+                        }
                         val type = call.argument<String>("type") ?: ""
                         val paths = call.argument<List<String>>("paths") ?: emptyList()
                         val level = call.argument<String>("level") ?: "medium"
@@ -85,7 +51,7 @@ class MainActivity : FlutterActivity() {
                             putExtra(MediaJobService.EXTRA_LEVEL, level)
                             putStringArrayListExtra(
                                 MediaJobService.EXTRA_PATHS,
-                                ArrayList(paths)
+                                ArrayList(paths),
                             )
                         }
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -184,22 +150,37 @@ class MainActivity : FlutterActivity() {
                     "saveVideo" -> {
                         val path = call.argument<String>("path") ?: ""
                         executor.execute {
-                            val uri = saveVideoToGallery(File(path))
-                            runOnUiThread { result.success(uri) }
+                            try {
+                                val uri = saveVideoToGallery(File(path))
+                                runOnUiThread { result.success(uri) }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "saveVideo", e)
+                                runOnUiThread { result.error("GALLERY", e.message, null) }
+                            }
                         }
                     }
                     "saveImage" -> {
                         val path = call.argument<String>("path") ?: ""
                         executor.execute {
-                            val uri = saveImageToGallery(File(path))
-                            runOnUiThread { result.success(uri) }
+                            try {
+                                val uri = saveImageToGallery(File(path))
+                                runOnUiThread { result.success(uri) }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "saveImage", e)
+                                runOnUiThread { result.error("GALLERY", e.message, null) }
+                            }
                         }
                     }
                     "saveAudio" -> {
                         val path = call.argument<String>("path") ?: ""
                         executor.execute {
-                            val uri = saveAudioToGallery(File(path))
-                            runOnUiThread { result.success(uri) }
+                            try {
+                                val uri = saveAudioToGallery(File(path))
+                                runOnUiThread { result.success(uri) }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "saveAudio", e)
+                                runOnUiThread { result.error("GALLERY", e.message, null) }
+                            }
                         }
                     }
                     else -> result.notImplemented()
@@ -207,9 +188,21 @@ class MainActivity : FlutterActivity() {
             }
     }
 
+    override fun onDestroy() {
+        lightListener?.let { listener ->
+            val sm = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+            sm.unregisterListener(listener)
+        }
+        lightListener = null
+        lightEvents = null
+        executor.shutdownNow()
+        super.onDestroy()
+    }
+
     private fun convertEpubStub(epubPath: String): String {
         val name = File(epubPath).nameWithoutExtension.ifBlank { "ebook" }
         val outDir = File(cacheDir, "ebook_out").apply { mkdirs() }
+        pruneDir(outDir, maxFiles = 12)
         val out = File(outDir, "${name}_${System.currentTimeMillis()}.pdf")
         val doc = PdfDocument()
         val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
@@ -220,11 +213,16 @@ class MainActivity : FlutterActivity() {
         }
         page.canvas.drawText("Tools Flutter · EPUB → PDF", 48f, 80f, paint)
         page.canvas.drawText("Source: ${File(epubPath).name}", 48f, 120f, paint)
-        page.canvas.drawText("(Stub conversion page — full pipeline uses native WebView/PDFBox)", 48f, 160f, paint)
+        page.canvas.drawText(
+            "(Stub conversion page — full pipeline uses native WebView/PDFBox)",
+            48f,
+            160f,
+            paint,
+        )
         doc.finishPage(page)
         FileOutputStream(out).use { doc.writeTo(it) }
         doc.close()
-        // save to downloads
+
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, out.name)
             put(MediaStore.Downloads.MIME_TYPE, "application/pdf")
@@ -240,13 +238,8 @@ class MainActivity : FlutterActivity() {
         }
         val uri = contentResolver.insert(collection, values)
         if (uri != null) {
-            contentResolver.openOutputStream(uri)?.use { os ->
-                FileInputStream(out).use { it.copyTo(os) }
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                values.clear()
-                values.put(MediaStore.Downloads.IS_PENDING, 0)
-                contentResolver.update(uri, values, null, null)
+            if (!copyFileToMediaStore(uri, out, values, MediaStore.Downloads.IS_PENDING)) {
+                return out.absolutePath
             }
             return uri.toString()
         }
@@ -254,11 +247,15 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun saveVideoToGallery(file: File): String? {
+        requireReadableFile(file)
         val values = ContentValues().apply {
             put(MediaStore.Video.Media.DISPLAY_NAME, file.name)
             put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/VideoEditor")
+                put(
+                    MediaStore.Video.Media.RELATIVE_PATH,
+                    Environment.DIRECTORY_MOVIES + "/VideoEditor",
+                )
                 put(MediaStore.Video.Media.IS_PENDING, 1)
             }
         }
@@ -266,23 +263,22 @@ class MainActivity : FlutterActivity() {
             MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         } else MediaStore.Video.Media.EXTERNAL_CONTENT_URI
         val uri = contentResolver.insert(collection, values) ?: return file.absolutePath
-        contentResolver.openOutputStream(uri)?.use { os ->
-            FileInputStream(file).use { it.copyTo(os) }
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            values.clear()
-            values.put(MediaStore.Video.Media.IS_PENDING, 0)
-            contentResolver.update(uri, values, null, null)
+        if (!copyFileToMediaStore(uri, file, values, MediaStore.Video.Media.IS_PENDING)) {
+            return null
         }
         return uri.toString()
     }
 
     private fun saveImageToGallery(file: File): String? {
+        requireReadableFile(file)
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, file.name)
             put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Tools")
+                put(
+                    MediaStore.Images.Media.RELATIVE_PATH,
+                    Environment.DIRECTORY_PICTURES + "/Tools",
+                )
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
         }
@@ -290,18 +286,14 @@ class MainActivity : FlutterActivity() {
             MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         } else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         val uri = contentResolver.insert(collection, values) ?: return file.absolutePath
-        contentResolver.openOutputStream(uri)?.use { os ->
-            FileInputStream(file).use { it.copyTo(os) }
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            values.clear()
-            values.put(MediaStore.Images.Media.IS_PENDING, 0)
-            contentResolver.update(uri, values, null, null)
+        if (!copyFileToMediaStore(uri, file, values, MediaStore.Images.Media.IS_PENDING)) {
+            return null
         }
         return uri.toString()
     }
 
     private fun saveAudioToGallery(file: File): String? {
+        requireReadableFile(file)
         val values = ContentValues().apply {
             put(MediaStore.Audio.Media.DISPLAY_NAME, file.name)
             put(MediaStore.Audio.Media.MIME_TYPE, "audio/mp4")
@@ -314,21 +306,61 @@ class MainActivity : FlutterActivity() {
             MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         } else MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val uri = contentResolver.insert(collection, values) ?: return file.absolutePath
-        contentResolver.openOutputStream(uri)?.use { os ->
-            FileInputStream(file).use { it.copyTo(os) }
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            values.clear()
-            values.put(MediaStore.Audio.Media.IS_PENDING, 1)
-            values.put(MediaStore.Audio.Media.IS_PENDING, 0)
-            contentResolver.update(uri, values, null, null)
+        if (!copyFileToMediaStore(uri, file, values, MediaStore.Audio.Media.IS_PENDING)) {
+            return null
         }
         return uri.toString()
     }
 
+    private fun requireReadableFile(file: File) {
+        if (!file.isFile || !file.canRead()) {
+            throw IllegalArgumentException("File not readable: ${file.path}")
+        }
+    }
+
+    /**
+     * Write [file] into [uri]. On failure deletes the MediaStore row (no ghost IS_PENDING entries).
+     * @return true if write + clear-pending succeeded
+     */
+    private fun copyFileToMediaStore(
+        uri: Uri,
+        file: File,
+        pendingValues: ContentValues,
+        pendingColumn: String,
+    ): Boolean {
+        return try {
+            val os = contentResolver.openOutputStream(uri)
+                ?: throw IllegalStateException("openOutputStream returned null")
+            os.use { out ->
+                FileInputStream(file).use { input -> input.copyTo(out) }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                pendingValues.clear()
+                pendingValues.put(pendingColumn, 0)
+                contentResolver.update(uri, pendingValues, null, null)
+            }
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "MediaStore write failed, deleting row $uri", e)
+            try {
+                contentResolver.delete(uri, null, null)
+            } catch (del: Exception) {
+                Log.w(TAG, "Failed to delete pending MediaStore row", del)
+            }
+            false
+        }
+    }
+
+    private fun pruneDir(dir: File, maxFiles: Int) {
+        val files = dir.listFiles()?.filter { it.isFile }?.sortedByDescending { it.lastModified() }
+            ?: return
+        if (files.size > maxFiles) {
+            files.drop(maxFiles).forEach { it.delete() }
+        }
+    }
+
     companion object {
         private const val TAG = "ToolsFlutter"
-        const val CH_FFMPEG = "com.robin.tools/ffmpeg"
         const val CH_MEDIA_JOB = "com.robin.tools/media_job"
         const val CH_MEDIA_EVENTS = "com.robin.tools/media_events"
         const val CH_LIGHT = "com.robin.tools/light_sensor"

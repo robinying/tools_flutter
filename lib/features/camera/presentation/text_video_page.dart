@@ -38,10 +38,17 @@ class _TextVideoPageState extends ConsumerState<TextVideoPage> {
     ref.listen(mediaJobProvider, (prev, next) async {
       if (next is MediaJobFinished) {
         if (next.success && next.outputPath != null) {
-          await ref.read(mediaJobProvider.notifier).saveOutput(next.outputPath!);
+          final uri =
+              await ref.read(mediaJobProvider.notifier).saveOutput(next.outputPath!);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Text video saved')),
+              SnackBar(
+                content: Text(
+                  uri != null
+                      ? 'Text video saved'
+                      : 'Encoded but gallery save failed',
+                ),
+              ),
             );
           }
         } else if (!next.success && context.mounted) {

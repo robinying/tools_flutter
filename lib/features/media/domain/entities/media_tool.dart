@@ -25,8 +25,23 @@ enum MediaToolType {
     this.multi = false,
   });
 
-  static MediaToolType fromId(String id) =>
-      MediaToolType.values.firstWhere((e) => e.id == id);
+  /// Returns null when [id] is not a known tool (safe for deep links / typos).
+  static MediaToolType? tryParse(String? id) {
+    if (id == null || id.isEmpty) return null;
+    for (final e in MediaToolType.values) {
+      if (e.id == id) return e;
+    }
+    return null;
+  }
+
+  /// Throws [ArgumentError] if unknown — prefer [tryParse] at route boundaries.
+  static MediaToolType fromId(String id) {
+    final parsed = tryParse(id);
+    if (parsed == null) {
+      throw ArgumentError.value(id, 'id', 'Unknown MediaToolType');
+    }
+    return parsed;
+  }
 }
 
 enum QualityLevel {

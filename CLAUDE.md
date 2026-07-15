@@ -78,8 +78,7 @@ android/app/
 
 | Channel | Purpose |
 |---------|---------|
-| `com.robin.tools/ffmpeg` | Direct FFmpeg args (optional) |
-| `com.robin.tools/media_job` + `media_events` | Start/cancel job + progress |
+| `com.robin.tools/media_job` + `media_events` | Start/cancel typed FFmpeg job + progress (raw FFmpeg channel removed) |
 | `com.robin.tools/light_sensor` + events | TYPE_LIGHT lux stream |
 | `com.robin.tools/ebook` | EPUB stub PDF |
 | `com.robin.tools/gallery` | Save video/image/audio to MediaStore |

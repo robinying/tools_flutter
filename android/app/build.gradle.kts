@@ -1,8 +1,22 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Release signing: prefer android/key.properties (gitignored) or env vars.
+// Falls back to debug keystore for local builds when no release keystore is configured.
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+}
+
+fun propOrEnv(propKey: String, envKey: String): String? =
+    keystoreProperties.getProperty(propKey)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(envKey)?.takeIf { it.isNotBlank() }
 
 android {
     namespace = "com.robin.tools_flutter"
@@ -26,9 +40,32 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            val storePath = propOrEnv("storeFile", "KEYSTORE_PATH")
+            val storePassword = propOrEnv("storePassword", "KEYSTORE_PASSWORD")
+            val keyAlias = propOrEnv("keyAlias", "KEY_ALIAS")
+            val keyPassword = propOrEnv("keyPassword", "KEY_PASSWORD")
+            if (storePath != null && storePassword != null && keyAlias != null && keyPassword != null) {
+                // Paths in key.properties are relative to android/ unless absolute.
+                storeFile = rootProject.file(storePath)
+                this.storePassword = storePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            val releaseConfig = signingConfigs.getByName("release")
+            signingConfig = if (releaseConfig.storeFile != null && releaseConfig.storeFile!!.exists()) {
+                releaseConfig
+            } else {
+                // Local/dev: still buildable; do not ship this artifact to stores.
+                signingConfigs.getByName("debug")
+            }
+            // R8/minify left off until Flutter + FFmpeg keep rules are validated on device.
         }
     }
 

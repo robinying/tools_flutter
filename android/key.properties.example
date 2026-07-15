@@ -1,0 +1,10 @@
+# Copy to android/key.properties (gitignored) for release signing.
+# Paths are resolved relative to the android/ directory unless absolute.
+
+storeFile=../path/to/upload-keystore.jks
+storePassword=***
+keyAlias=upload
+keyPassword=***
+
+# Alternatively set env vars (used when key.properties is missing keys):
+# KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD

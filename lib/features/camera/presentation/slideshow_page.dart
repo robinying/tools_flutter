@@ -44,10 +44,17 @@ class _SlideshowPageState extends ConsumerState<SlideshowPage> {
     ref.listen(mediaJobProvider, (prev, next) async {
       if (next is MediaJobFinished) {
         if (next.success && next.outputPath != null) {
-          await ref.read(mediaJobProvider.notifier).saveOutput(next.outputPath!);
+          final uri =
+              await ref.read(mediaJobProvider.notifier).saveOutput(next.outputPath!);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Slideshow saved')),
+              SnackBar(
+                content: Text(
+                  uri != null
+                      ? 'Slideshow saved'
+                      : 'Encoded but gallery save failed',
+                ),
+              ),
             );
           }
         } else if (!next.success && context.mounted) {

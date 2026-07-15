@@ -2,7 +2,12 @@
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET"/>
 
-    <!-- Debug-only: allow adb to start media jobs for device verification -->
+    <!--
+      Debug-only: allow adb to start media jobs for device verification.
+      Release keeps exported=false. Paths are validated by MediaPathPolicy
+      (app storage + user media roots only; no /proc|/sys|/dev).
+      Do not distribute debug APKs outside trusted devices.
+    -->
     <application>
         <service
             android:name=".MediaJobService"
