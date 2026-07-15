@@ -1,16 +1,17 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../../../core/platform/native_bridge.dart';
 import '../../../core/theme/app_theme.dart';
+import 'providers/gallery_providers.dart';
 
-class RecordPage extends StatefulWidget {
+class RecordPage extends ConsumerStatefulWidget {
   const RecordPage({super.key});
   @override
-  State<RecordPage> createState() => _RecordPageState();
+  ConsumerState<RecordPage> createState() => _RecordPageState();
 }
 
-class _RecordPageState extends State<RecordPage> {
+class _RecordPageState extends ConsumerState<RecordPage> {
   CameraController? _controller;
   String? _error;
   bool _recording = false;
@@ -40,12 +41,21 @@ class _RecordPageState extends State<RecordPage> {
     if (_recording) {
       final file = await c.stopVideoRecording();
       setState(() => _recording = false);
-      final uri = await NativeBridge.saveVideo(file.path);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(uri != null ? 'Video saved' : file.path)),
-        );
-      }
+      final result =
+          await ref.read(galleryRepositoryProvider).saveVideo(file.path);
+      if (!mounted) return;
+      result.fold(
+        onSuccess: (uri) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(uri != null ? 'Video saved' : file.path)),
+          );
+        },
+        onFailure: (f) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(f.displayMessage)),
+          );
+        },
+      );
     } else {
       await c.startVideoRecording();
       setState(() => _recording = true);

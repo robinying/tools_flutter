@@ -10,6 +10,7 @@ Implements Phases 0–5 from `Tools/docs/flutter-implementation-guide.md`:
 | 1–2 | FFmpeg MethodChannel + `MediaJobService` FGS + Media tools UI | Done |
 | 3–4 | Camera photo/record + text card + slideshow | Done |
 | 5 | LightLux + Face + Ebook (EPUB stub PDF) | Done |
+| Arch | Freezed + thick Repository + Notifier (Media/Light/Face/Ebook/Camera gallery) | Done |
 
 ## Features
 

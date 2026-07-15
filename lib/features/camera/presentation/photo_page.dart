@@ -1,16 +1,17 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../../../core/platform/native_bridge.dart';
 import '../../../core/theme/app_theme.dart';
+import 'providers/gallery_providers.dart';
 
-class PhotoPage extends StatefulWidget {
+class PhotoPage extends ConsumerStatefulWidget {
   const PhotoPage({super.key});
   @override
-  State<PhotoPage> createState() => _PhotoPageState();
+  ConsumerState<PhotoPage> createState() => _PhotoPageState();
 }
 
-class _PhotoPageState extends State<PhotoPage> {
+class _PhotoPageState extends ConsumerState<PhotoPage> {
   CameraController? _controller;
   String? _error;
   bool _busy = false;
@@ -48,12 +49,21 @@ class _PhotoPageState extends State<PhotoPage> {
     setState(() => _busy = true);
     try {
       final file = await c.takePicture();
-      final uri = await NativeBridge.saveImage(file.path);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(uri != null ? 'Photo saved' : 'Saved ${file.path}')),
-        );
-      }
+      final result =
+          await ref.read(galleryRepositoryProvider).saveImage(file.path);
+      if (!mounted) return;
+      result.fold(
+        onSuccess: (uri) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(uri != null ? 'Photo saved' : 'Saved ${file.path}')),
+          );
+        },
+        onFailure: (f) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(f.displayMessage)),
+          );
+        },
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));

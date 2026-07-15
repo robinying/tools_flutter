@@ -1,124 +1,58 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/platform/native_bridge.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/text_option_chip.dart';
-import '../data/lux_scene.dart';
-import '../data/snapshot_db.dart';
+import '../domain/entities/lux_models.dart';
+import 'providers/light_providers.dart';
 
-class LightMeterPage extends StatefulWidget {
+class LightMeterPage extends ConsumerStatefulWidget {
   const LightMeterPage({super.key});
   @override
-  State<LightMeterPage> createState() => _LightMeterPageState();
+  ConsumerState<LightMeterPage> createState() => _LightMeterPageState();
 }
 
-class _LightMeterPageState extends State<LightMeterPage> {
-  final _db = SnapshotDb();
+class _LightMeterPageState extends ConsumerState<LightMeterPage> {
   final _noteCtrl = TextEditingController();
-  final _buffer = <ChartPoint>[];
-  StreamSubscription? _sub;
-  bool? _available;
-  String? _error;
-  double _lux = 0;
-  ChartWindow _window = ChartWindow.s60;
-  int _lastUi = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    // Defer platform calls until after first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) => _init());
-  }
-
-  Future<void> _init() async {
-    try {
-      final ok = await NativeBridge.lightSensorAvailable();
-      if (!mounted) return;
-      setState(() => _available = ok);
-      if (!ok) return;
-      _sub = NativeBridge.lightSensorStream().listen(
-        (v) {
-          final now = DateTime.now().millisecondsSinceEpoch;
-          _buffer.add(ChartPoint(now, v));
-          _buffer.removeWhere((p) => now - p.t > 300000);
-          _lux = v;
-          if (now - _lastUi < 120) return;
-          _lastUi = now;
-          if (mounted) setState(() {});
-        },
-        onError: (e) {
-          if (mounted) {
-            setState(() => _error = e.toString());
-          }
-        },
-      );
-    } on PlatformException catch (e) {
-      if (mounted) {
-        setState(() {
-          _available = false;
-          _error = e.message ?? e.code;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _available = false;
-          _error = e.toString();
-        });
-      }
-    }
-  }
-
-  List<ChartPoint> get _visible {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    return _buffer.where((p) => now - p.t <= _window.ms).toList();
-  }
-
-  ChartStats get _stats => ChartStats.from(_visible);
-
-  Future<void> _save() async {
-    try {
-      await _db.insert(Snapshot(
-        timestamp: DateTime.now().millisecondsSinceEpoch,
-        lux: _lux,
-        note: _noteCtrl.text.trim(),
-      ));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e')));
-      return;
-    }
-    if (!mounted) return;
-    final note = _noteCtrl.text.trim();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(note.isEmpty
-            ? 'Saved: ${_lux.toStringAsFixed(1)} lux'
-            : 'Saved: ${_lux.toStringAsFixed(1)} lux — $note'),
-      ),
-    );
-    _noteCtrl.clear();
-  }
 
   @override
   void dispose() {
-    _sub?.cancel();
     _noteCtrl.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_available == null && _error == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Light Meter')),
-        body: const Center(child: CircularProgressIndicator()),
+  Future<void> _save() async {
+    final r = await ref.read(lightMeterProvider.notifier).saveSnapshot(_noteCtrl.text);
+    if (!mounted) return;
+    if (r.success) {
+      final note = r.note ?? '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            note.isEmpty
+                ? 'Saved: ${r.lux!.toStringAsFixed(1)} lux'
+                : 'Saved: ${r.lux!.toStringAsFixed(1)} lux — $note',
+          ),
+        ),
+      );
+      _noteCtrl.clear();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Save failed: ${r.error}')),
       );
     }
-    if (_available == false) {
-      return Scaffold(
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(lightMeterProvider);
+
+    return state.when(
+      loading: () => Scaffold(
+        appBar: AppBar(title: const Text('Light Meter')),
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      unavailable: (error) => Scaffold(
         appBar: AppBar(title: const Text('Light Meter')),
         body: Center(
           child: Padding(
@@ -128,10 +62,13 @@ class _LightMeterPageState extends State<LightMeterPage> {
               children: [
                 const Icon(Icons.light_mode, size: 48),
                 const SizedBox(height: 16),
-                const Text('No light sensor', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                const Text(
+                  'No light sensor',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(height: 8),
                 Text(
-                  _error ??
+                  error ??
                       'This device does not report ambient light (TYPE_LIGHT).',
                   textAlign: TextAlign.center,
                 ),
@@ -139,108 +76,112 @@ class _LightMeterPageState extends State<LightMeterPage> {
             ),
           ),
         ),
-      );
-    }
-
-    final stats = _stats;
-    final scene = LuxScene.fromLux(_lux);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Light Meter'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.history),
-            tooltip: 'History',
-            onPressed: () => context.push('/light/history'),
-          ),
-        ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(AppDimens.lg),
-        children: [
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppDimens.md),
-              child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ),
-          // Exclude live values from a11y tree to avoid flooding UIAutomator/TalkBack
-          ExcludeSemantics(
-            child: Column(
-              children: [
-                Text(
-                  _lux.toStringAsFixed(1),
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const Text('lux', textAlign: TextAlign.center),
-                const SizedBox(height: AppDimens.sm),
-                Text(
-                  scene.label,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.secondary,
-                      ),
-                ),
-                if (stats.n > 0) ...[
-                  const SizedBox(height: AppDimens.md),
-                  Text(
-                    'Min ${stats.min.toStringAsFixed(1)} · Max ${stats.max.toStringAsFixed(1)} · '
-                    'Avg ${stats.avg.toStringAsFixed(1)} · n=${stats.n}',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          Semantics(
-            label: 'Ambient light ${_lux.toStringAsFixed(0)} lux, ${scene.label}',
-            child: const SizedBox.shrink(),
-          ),
-          const SizedBox(height: AppDimens.lg),
-          TextField(
-            controller: _noteCtrl,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Note (optional)',
-            ),
-          ),
-          const SizedBox(height: AppDimens.md),
-          FilledButton.icon(
-            onPressed: _save,
-            icon: const Icon(Icons.save),
-            label: const Text('Save Snapshot'),
-          ),
-          const SizedBox(height: AppDimens.xl),
-          const Text('Real-time chart', style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: AppDimens.sm),
-          Wrap(
-            spacing: AppDimens.sm,
-            children: [
-              for (final w in ChartWindow.values)
-                TextOptionChip(
-                  label: w.label,
-                  selected: _window == w,
-                  onTap: () => setState(() => _window = w),
-                ),
+      ready: (lux, buffer, window, streamError) {
+        final visible = ref.read(lightMeterProvider.notifier).visiblePoints();
+        final stats = ChartStats.fromPoints(visible);
+        final scene = LuxScene.fromLux(lux);
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Light Meter'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.history),
+                tooltip: 'History',
+                onPressed: () => context.push('/light/history'),
+              ),
             ],
           ),
-          const SizedBox(height: AppDimens.md),
-          SizedBox(
-            height: 200,
-            child: CustomPaint(
-              painter: _LuxPainter(_visible, Theme.of(context).colorScheme.primary),
-              child: const SizedBox.expand(),
-            ),
+          body: ListView(
+            padding: const EdgeInsets.all(AppDimens.lg),
+            children: [
+              if (streamError != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppDimens.md),
+                  child: Text(
+                    streamError,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                ),
+              ExcludeSemantics(
+                child: Column(
+                  children: [
+                    Text(
+                      lux.toStringAsFixed(1),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const Text('lux', textAlign: TextAlign.center),
+                    const SizedBox(height: AppDimens.sm),
+                    Text(
+                      scene.label,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.secondary,
+                          ),
+                    ),
+                    if (stats.n > 0) ...[
+                      const SizedBox(height: AppDimens.md),
+                      Text(
+                        'Min ${stats.min.toStringAsFixed(1)} · Max ${stats.max.toStringAsFixed(1)} · '
+                        'Avg ${stats.avg.toStringAsFixed(1)} · n=${stats.n}',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Semantics(
+                label: 'Ambient light ${lux.toStringAsFixed(0)} lux, ${scene.label}',
+                child: const SizedBox.shrink(),
+              ),
+              const SizedBox(height: AppDimens.lg),
+              TextField(
+                controller: _noteCtrl,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Note (optional)',
+                ),
+              ),
+              const SizedBox(height: AppDimens.md),
+              FilledButton.icon(
+                onPressed: _save,
+                icon: const Icon(Icons.save),
+                label: const Text('Save Snapshot'),
+              ),
+              const SizedBox(height: AppDimens.xl),
+              const Text('Real-time chart', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: AppDimens.sm),
+              Wrap(
+                spacing: AppDimens.sm,
+                children: [
+                  for (final w in ChartWindow.values)
+                    TextOptionChip(
+                      label: w.label,
+                      selected: window == w,
+                      onTap: () =>
+                          ref.read(lightMeterProvider.notifier).setWindow(w),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppDimens.md),
+              SizedBox(
+                height: 200,
+                child: CustomPaint(
+                  painter: _LuxPainter(visible, Theme.of(context).colorScheme.primary),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -253,7 +194,8 @@ class _LuxPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (data.length < 2) return;
-    final maxLux = (data.map((e) => e.lux).reduce((a, b) => a > b ? a : b) + 10).clamp(100, double.infinity);
+    final maxLux =
+        (data.map((e) => e.lux).reduce((a, b) => a > b ? a : b) + 10).clamp(100, double.infinity);
     final minT = data.first.t.toDouble();
     final maxT = data.last.t.toDouble();
     final range = (maxT - minT).clamp(1, double.infinity);

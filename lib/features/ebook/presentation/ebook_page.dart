@@ -1,49 +1,35 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import '../../../core/platform/native_bridge.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
+import 'providers/ebook_providers.dart';
 
-class EbookPage extends StatefulWidget {
+class EbookPage extends ConsumerWidget {
   const EbookPage({super.key});
-  @override
-  State<EbookPage> createState() => _EbookPageState();
-}
 
-class _EbookPageState extends State<EbookPage> {
-  String? _path;
-  bool _busy = false;
-
-  Future<void> _pick() async {
+  Future<void> _pick(WidgetRef ref) async {
     final r = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['epub'],
     );
     if (r == null || r.paths.isEmpty) return;
-    setState(() => _path = r.paths.first);
-  }
-
-  Future<void> _convert() async {
-    final p = _path;
-    if (p == null) return;
-    setState(() => _busy = true);
-    try {
-      final out = await NativeBridge.convertEpub(p);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PDF ready: $out')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
+    final path = r.paths.first;
+    if (path != null) {
+      ref.read(ebookProvider.notifier).setPath(path);
     }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(ebookProvider);
+
+    ref.listen(ebookProvider, (prev, next) {
+      final msg = next.lastMessage;
+      if (msg != null && msg != prev?.lastMessage && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      }
+    });
+
     return Scaffold(
       appBar: AppBar(title: const Text('Ebook Converter')),
       body: Padding(
@@ -51,16 +37,22 @@ class _EbookPageState extends State<EbookPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Convert EPUB to PDF (Android native stub writes a valid PDF summary page).'),
+            const Text(
+              'Convert EPUB to PDF (Android native stub writes a valid PDF summary page).',
+            ),
             const SizedBox(height: AppDimens.lg),
             FilledButton(
-              onPressed: _busy ? null : _pick,
-              child: Text(_path == null ? 'Select EPUB' : _path!.split('/').last),
+              onPressed: state.busy ? null : () => _pick(ref),
+              child: Text(
+                state.path == null ? 'Select EPUB' : state.path!.split('/').last,
+              ),
             ),
             const Spacer(),
             FilledButton(
-              onPressed: _busy || _path == null ? null : _convert,
-              child: Text(_busy ? 'Converting…' : 'Convert to PDF'),
+              onPressed: state.busy || state.path == null
+                  ? null
+                  : () => ref.read(ebookProvider.notifier).convert(),
+              child: Text(state.busy ? 'Converting…' : 'Convert to PDF'),
             ),
           ],
         ),

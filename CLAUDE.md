@@ -72,7 +72,7 @@ android/app/
 
 - Features do not depend on each other; shared code lives in `core/`.
 - Long media work runs in `MediaJobService` (foreground), progress via `EventChannel`.
-- Migration status: **Phase A + Phase B (Media vertical slice) done**; LightLux / Camera / Face / Ebook pending.
+- Migration status: **Phases A–D done** (Media, LightLux, Camera gallery, Face, Ebook).
 
 ## Native channels (`NativeBridge`)
 
