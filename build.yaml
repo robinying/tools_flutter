@@ -1,0 +1,11 @@
+# Freezed / codegen configuration.
+# Generated files (*.freezed.dart, *.g.dart) are committed to git.
+
+targets:
+  $default:
+    builders:
+      freezed:
+        options:
+          # Keep maps/json off by default; enable per-file with json_serializable when needed.
+          map: false
+          when: true

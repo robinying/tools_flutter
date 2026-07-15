@@ -22,16 +22,21 @@ Implements Phases 0–5 from `Tools/docs/flutter-implementation-guide.md`:
 ## Stack
 
 - Flutter 3.32 / Dart 3.8
-- Riverpod + go_router
+- **Riverpod** + **GoRouter** + **Freezed**
+- Architecture: feature-first, **thick Repository + Notifier** (domain interfaces + data impl)
 - Local `android/app/libs/ffmpeg-kit.aar` + smart-exception
 - Android FGS `mediaProcessing` (`MediaJobService`)
 - camera / file_picker / google_mlkit_face_detection / sqflite
+
+Generated Freezed files (`*.freezed.dart`) are **committed**.
 
 ## Build & install
 
 ```bash
 cd tools_flutter
 flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+flutter test
 flutter build apk --debug
 adb install -r build/app/outputs/flutter-apk/app-debug.apk
 adb shell am start -n com.robin.tools_flutter/.MainActivity
