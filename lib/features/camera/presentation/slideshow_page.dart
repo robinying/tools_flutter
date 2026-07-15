@@ -1,10 +1,10 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/platform/native_bridge.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/text_option_chip.dart';
-import '../../media/data/media_job_controller.dart';
+import '../../media/domain/entities/media_job_state.dart';
+import '../../media/presentation/providers/media_job_notifier.dart';
 
 class SlideshowPage extends ConsumerStatefulWidget {
   const SlideshowPage({super.key});
@@ -44,7 +44,7 @@ class _SlideshowPageState extends ConsumerState<SlideshowPage> {
     ref.listen(mediaJobProvider, (prev, next) async {
       if (next is MediaJobFinished) {
         if (next.success && next.outputPath != null) {
-          await NativeBridge.saveVideo(next.outputPath!);
+          await ref.read(mediaJobProvider.notifier).saveOutput(next.outputPath!);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Slideshow saved')),

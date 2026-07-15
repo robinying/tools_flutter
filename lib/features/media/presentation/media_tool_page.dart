@@ -2,11 +2,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../../../core/platform/native_bridge.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/text_option_chip.dart';
-import '../data/media_job_controller.dart';
-import '../data/media_tool.dart';
+import '../domain/entities/media_job_state.dart';
+import '../domain/entities/media_tool.dart';
+import 'providers/media_job_notifier.dart';
 
 class MediaToolPage extends ConsumerStatefulWidget {
   final MediaToolType type;
@@ -57,18 +57,15 @@ class _MediaToolPageState extends ConsumerState<MediaToolPage> {
     ref.listen(mediaJobProvider, (prev, next) async {
       if (next is MediaJobFinished) {
         if (next.success && next.outputPath != null) {
-          final p = next.outputPath!;
-          String? uri;
-          if (p.endsWith('.m4a') || p.endsWith('.mp3')) {
-            uri = await NativeBridge.saveAudio(p);
-          } else if (p.endsWith('.jpg') || p.endsWith('.png') || p.endsWith('.gif')) {
-            uri = await NativeBridge.saveImage(p);
-          } else {
-            uri = await NativeBridge.saveVideo(p);
-          }
+          final uri =
+              await ref.read(mediaJobProvider.notifier).saveOutput(next.outputPath!);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(uri != null ? 'Saved: $uri' : 'Done: $p')),
+              SnackBar(
+                content: Text(
+                  uri != null ? 'Saved: $uri' : 'Done: ${next.outputPath}',
+                ),
+              ),
             );
           }
         } else if (!next.success && context.mounted) {

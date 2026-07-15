@@ -1,3 +1,4 @@
+/// Catalog of media tools and quality/option levels (domain).
 enum MediaToolType {
   videoCompress('videoCompress', 'Video Compress', 'Compress video with FFmpeg', false),
   imageCompress('imageCompress', 'Image Compress', 'Compress images', true),
@@ -16,7 +17,13 @@ enum MediaToolType {
   final String description;
   final bool isImage;
   final bool multi;
-  const MediaToolType(this.id, this.title, this.description, this.isImage, {this.multi = false});
+  const MediaToolType(
+    this.id,
+    this.title,
+    this.description,
+    this.isImage, {
+    this.multi = false,
+  });
 
   static MediaToolType fromId(String id) =>
       MediaToolType.values.firstWhere((e) => e.id == id);

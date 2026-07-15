@@ -59,8 +59,8 @@ lib/
     theme/, widgets/, platform/NativeBridge
   features/
     home/
-    media/                  # tools list + MediaJobController (Riverpod) — clean vertical slice next
-    camera/
+    media/                  # domain + data + presentation (MediaRepository / MediaJobNotifier)
+    camera/                 # reuses mediaJobProvider for text/slideshow
     lightlux/
     face/
     ebook/
@@ -72,7 +72,7 @@ android/app/
 
 - Features do not depend on each other; shared code lives in `core/`.
 - Long media work runs in `MediaJobService` (foreground), progress via `EventChannel`.
-- Migration status: **Phase A (Freezed + Result) done**; Media/LightLux/etc. domain layers pending.
+- Migration status: **Phase A + Phase B (Media vertical slice) done**; LightLux / Camera / Face / Ebook pending.
 
 ## Native channels (`NativeBridge`)
 

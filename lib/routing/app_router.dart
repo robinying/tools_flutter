@@ -9,7 +9,7 @@ import '../features/face/presentation/face_compare_page.dart';
 import '../features/home/home_page.dart';
 import '../features/lightlux/presentation/light_meter_page.dart';
 import '../features/lightlux/presentation/snapshot_list_page.dart';
-import '../features/media/data/media_tool.dart';
+import '../features/media/domain/entities/media_tool.dart';
 import '../features/media/presentation/media_home_page.dart';
 import '../features/media/presentation/media_tool_page.dart';
 

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/feature_card.dart';
-import '../data/media_tool.dart';
+import '../domain/entities/media_tool.dart';
 
 class MediaHomePage extends StatelessWidget {
   const MediaHomePage({super.key});

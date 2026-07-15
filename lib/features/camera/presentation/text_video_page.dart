@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/platform/native_bridge.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../media/data/media_job_controller.dart';
+import '../../media/domain/entities/media_job_state.dart';
+import '../../media/presentation/providers/media_job_notifier.dart';
 
 class TextVideoPage extends ConsumerStatefulWidget {
   const TextVideoPage({super.key});
@@ -38,7 +38,7 @@ class _TextVideoPageState extends ConsumerState<TextVideoPage> {
     ref.listen(mediaJobProvider, (prev, next) async {
       if (next is MediaJobFinished) {
         if (next.success && next.outputPath != null) {
-          await NativeBridge.saveVideo(next.outputPath!);
+          await ref.read(mediaJobProvider.notifier).saveOutput(next.outputPath!);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Text video saved')),
