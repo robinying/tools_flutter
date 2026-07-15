@@ -53,7 +53,7 @@ class HomePage extends StatelessWidget {
               title: 'Light Meter',
               description: 'Ambient lux, scene, snapshots',
               icon: Icons.light_mode_outlined,
-              onTap: () => context.push('/lightlux'),
+              onTap: () => context.push('/light'),
             ),
             const SizedBox(height: AppDimens.md),
             FeatureCard(

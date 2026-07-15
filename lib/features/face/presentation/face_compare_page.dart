@@ -28,8 +28,11 @@ class _FaceComparePageState extends State<FaceComparePage> {
     final x = await _picker.pickImage(source: ImageSource.gallery);
     if (x == null) return;
     setState(() {
-      if (a) _pathA = x.path;
-      else _pathB = x.path;
+      if (a) {
+        _pathA = x.path;
+      } else {
+        _pathB = x.path;
+      }
       _result = null;
     });
   }

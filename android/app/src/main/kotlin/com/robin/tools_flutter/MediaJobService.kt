@@ -22,18 +22,31 @@ class MediaJobService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val type = intent?.getStringExtra(EXTRA_TYPE) ?: run {
-            stopSelf(); return START_NOT_STICKY
-        }
-        val level = intent.getStringExtra(EXTRA_LEVEL) ?: "medium"
-        val paths = intent.getStringArrayListExtra(EXTRA_PATHS) ?: arrayListOf()
-        if (paths.isEmpty()) {
-            emit(mapOf("phase" to "failed", "message" to "No input files"))
+        // Must call startForeground ASAP (Android 8+/12+ FGS contract)
+        try {
+            startAsForeground()
+        } catch (e: Exception) {
+            Log.e(TAG, "startForeground failed", e)
             stopSelf()
             return START_NOT_STICKY
         }
 
-        startAsForeground()
+        val type = intent?.getStringExtra(EXTRA_TYPE)
+        if (type.isNullOrBlank()) {
+            emit(mapOf("phase" to "failed", "message" to "No job type"))
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        val level = intent.getStringExtra(EXTRA_LEVEL) ?: "medium"
+        val paths = readPaths(intent)
+        if (paths.isEmpty()) {
+            emit(mapOf("phase" to "failed", "message" to "No input files"))
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         cancelRequested = false
         executor.execute {
             try {
@@ -54,12 +67,28 @@ class MediaJobService : Service() {
             } catch (e: Exception) {
                 Log.e(TAG, "job failed", e)
                 emit(mapOf("phase" to "failed", "message" to (e.message ?: "error")))
+            } catch (t: Throwable) {
+                Log.e(TAG, "job fatal", t)
+                emit(mapOf("phase" to "failed", "message" to (t.message ?: "fatal")))
             } finally {
-                stopForeground(STOP_FOREGROUND_REMOVE)
+                try {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } catch (_: Exception) {
+                }
                 stopSelf()
             }
         }
         return START_NOT_STICKY
+    }
+
+    private fun readPaths(intent: Intent): ArrayList<String> {
+        val raw = intent.extras?.get(EXTRA_PATHS) ?: return arrayListOf()
+        return when (raw) {
+            is ArrayList<*> -> ArrayList(raw.mapNotNull { it?.toString() })
+            is Array<*> -> ArrayList(raw.mapNotNull { it?.toString() })
+            is String -> arrayListOf(raw)
+            else -> arrayListOf()
+        }
     }
 
     private fun startAsForeground() {
@@ -94,6 +123,7 @@ class MediaJobService : Service() {
         val ts = System.currentTimeMillis()
         emit(mapOf("phase" to "running", "progress" to 0.15, "message" to type))
         if (cancelRequested) return null
+        Log.i(TAG, "runJob type=$type level=$level paths=$paths")
 
         if (type == "merge") {
             if (paths.size < 2) return null
@@ -245,10 +275,14 @@ class MediaJobService : Service() {
 
         emit(mapOf("phase" to "running", "progress" to 0.45, "message" to "Encoding…"))
         if (cancelRequested) return null
+        Log.i(TAG, "ffmpeg args=${args.joinToString(" ")}")
         val session = FFmpegKit.executeWithArguments(args)
-        if (ReturnCode.isSuccess(session.returnCode)) return out
+        if (ReturnCode.isSuccess(session.returnCode)) {
+            Log.i(TAG, "ffmpeg ok -> $out")
+            return out
+        }
 
-        Log.e(TAG, "ffmpeg fail: ${session.allLogsAsString}")
+        Log.e(TAG, "ffmpeg fail code=${session.returnCode}: ${session.allLogsAsString}")
         if (type == "stripAudio") {
             val retryOut = File(outDir, "muted2_$ts.mp4").absolutePath
             val retry = arrayOf(
@@ -279,13 +313,17 @@ class MediaJobService : Service() {
                 "-c:v", "mpeg4", "-q:v", "5", "-y", retryOut
             )
             val s2 = FFmpegKit.executeWithArguments(retry)
-            if (ReturnCode.isSuccess(s2.returnCode)) return retryOut
+            if (ReturnCode.isSuccess(s2.returnCode)) {
+                Log.i(TAG, "textCard fallback ok -> $retryOut")
+                return retryOut
+            }
         }
         return null
     }
 
     private fun emit(map: Map<String, Any?>) {
         try {
+            Log.i(TAG, "emit $map")
             eventSink?.success(map)
         } catch (e: Exception) {
             Log.w(TAG, "emit failed", e)

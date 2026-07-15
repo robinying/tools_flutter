@@ -18,36 +18,41 @@ class FeatureCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.lg,
-            vertical: AppDimens.xl,
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 28, color: cs.primary),
-              const SizedBox(width: AppDimens.lg),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 4),
-                    Text(
-                      description,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
-                    ),
-                  ],
+    return Semantics(
+      button: true,
+      label: title,
+      hint: description,
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.lg,
+              vertical: AppDimens.xl,
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 28, color: cs.primary),
+                const SizedBox(width: AppDimens.lg),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 4),
+                      Text(
+                        description,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
-            ],
+                Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+              ],
+            ),
           ),
         ),
       ),

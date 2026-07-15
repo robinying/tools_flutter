@@ -138,13 +138,21 @@ class MainActivity : FlutterActivity() {
                     }
                     val listener = object : SensorEventListener {
                         override fun onSensorChanged(event: SensorEvent) {
-                            lightEvents?.success(event.values[0].toDouble())
+                            val lux = event.values[0].toDouble()
+                            // EventChannel must be invoked on the platform thread / UI thread
+                            runOnUiThread {
+                                try {
+                                    lightEvents?.success(lux)
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "light emit failed", e)
+                                }
+                            }
                         }
 
                         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
                     }
                     lightListener = listener
-                    sm.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+                    sm.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
                 }
 
                 override fun onCancel(arguments: Any?) {

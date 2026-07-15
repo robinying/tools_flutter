@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/platform/native_bridge.dart';
 import '../../../core/theme/app_theme.dart';
@@ -19,27 +20,55 @@ class _LightMeterPageState extends State<LightMeterPage> {
   final _buffer = <ChartPoint>[];
   StreamSubscription? _sub;
   bool? _available;
+  String? _error;
   double _lux = 0;
   ChartWindow _window = ChartWindow.s60;
+  int _lastUi = 0;
 
   @override
   void initState() {
     super.initState();
-    _init();
+    // Defer platform calls until after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) => _init());
   }
 
   Future<void> _init() async {
-    final ok = await NativeBridge.lightSensorAvailable();
-    setState(() => _available = ok);
-    if (!ok) return;
-    _sub = NativeBridge.lightSensorStream().listen((v) {
-      final now = DateTime.now().millisecondsSinceEpoch;
-      setState(() {
-        _lux = v;
-        _buffer.add(ChartPoint(now, v));
-        _buffer.removeWhere((p) => now - p.t > 300000);
-      });
-    });
+    try {
+      final ok = await NativeBridge.lightSensorAvailable();
+      if (!mounted) return;
+      setState(() => _available = ok);
+      if (!ok) return;
+      _sub = NativeBridge.lightSensorStream().listen(
+        (v) {
+          final now = DateTime.now().millisecondsSinceEpoch;
+          _buffer.add(ChartPoint(now, v));
+          _buffer.removeWhere((p) => now - p.t > 300000);
+          _lux = v;
+          if (now - _lastUi < 120) return;
+          _lastUi = now;
+          if (mounted) setState(() {});
+        },
+        onError: (e) {
+          if (mounted) {
+            setState(() => _error = e.toString());
+          }
+        },
+      );
+    } on PlatformException catch (e) {
+      if (mounted) {
+        setState(() {
+          _available = false;
+          _error = e.message ?? e.code;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _available = false;
+          _error = e.toString();
+        });
+      }
+    }
   }
 
   List<ChartPoint> get _visible {
@@ -50,11 +79,17 @@ class _LightMeterPageState extends State<LightMeterPage> {
   ChartStats get _stats => ChartStats.from(_visible);
 
   Future<void> _save() async {
-    await _db.insert(Snapshot(
-      timestamp: DateTime.now().millisecondsSinceEpoch,
-      lux: _lux,
-      note: _noteCtrl.text.trim(),
-    ));
+    try {
+      await _db.insert(Snapshot(
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        lux: _lux,
+        note: _noteCtrl.text.trim(),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e')));
+      return;
+    }
     if (!mounted) return;
     final note = _noteCtrl.text.trim();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -76,7 +111,7 @@ class _LightMeterPageState extends State<LightMeterPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_available == null) {
+    if (_available == null && _error == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Light Meter')),
         body: const Center(child: CircularProgressIndicator()),
@@ -85,18 +120,19 @@ class _LightMeterPageState extends State<LightMeterPage> {
     if (_available == false) {
       return Scaffold(
         appBar: AppBar(title: const Text('Light Meter')),
-        body: const Center(
+        body: Center(
           child: Padding(
-            padding: EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.light_mode, size: 48),
-                SizedBox(height: 16),
-                Text('No light sensor', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                SizedBox(height: 8),
+                const Icon(Icons.light_mode, size: 48),
+                const SizedBox(height: 16),
+                const Text('No light sensor', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
                 Text(
-                  'This device does not report ambient light (TYPE_LIGHT).',
+                  _error ??
+                      'This device does not report ambient light (TYPE_LIGHT).',
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -115,41 +151,58 @@ class _LightMeterPageState extends State<LightMeterPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.history),
-            onPressed: () => context.push('/lightlux/history'),
+            tooltip: 'History',
+            onPressed: () => context.push('/light/history'),
           ),
         ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(AppDimens.lg),
         children: [
-          Text(
-            _lux.toStringAsFixed(1),
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const Text('lux', textAlign: TextAlign.center),
-          const SizedBox(height: AppDimens.sm),
-          Text(
-            scene.label,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
-          ),
-          if (stats.n > 0) ...[
-            const SizedBox(height: AppDimens.md),
-            Text(
-              'Min ${stats.min.toStringAsFixed(1)} · Max ${stats.max.toStringAsFixed(1)} · '
-              'Avg ${stats.avg.toStringAsFixed(1)} · n=${stats.n}',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppDimens.md),
+              child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ),
-          ],
+          // Exclude live values from a11y tree to avoid flooding UIAutomator/TalkBack
+          ExcludeSemantics(
+            child: Column(
+              children: [
+                Text(
+                  _lux.toStringAsFixed(1),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const Text('lux', textAlign: TextAlign.center),
+                const SizedBox(height: AppDimens.sm),
+                Text(
+                  scene.label,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.secondary,
+                      ),
+                ),
+                if (stats.n > 0) ...[
+                  const SizedBox(height: AppDimens.md),
+                  Text(
+                    'Min ${stats.min.toStringAsFixed(1)} · Max ${stats.max.toStringAsFixed(1)} · '
+                    'Avg ${stats.avg.toStringAsFixed(1)} · n=${stats.n}',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Semantics(
+            label: 'Ambient light ${_lux.toStringAsFixed(0)} lux, ${scene.label}',
+            child: const SizedBox.shrink(),
+          ),
           const SizedBox(height: AppDimens.lg),
           TextField(
             controller: _noteCtrl,
@@ -209,8 +262,11 @@ class _LuxPainter extends CustomPainter {
       final p = data[i];
       final x = ((p.t - minT) / range) * size.width;
       final y = size.height - (p.lux / maxLux) * size.height;
-      if (i == 0) path.moveTo(x, y);
-      else path.lineTo(x, y);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
     }
     canvas.drawPath(
       path,
