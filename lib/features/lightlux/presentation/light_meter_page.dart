@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/l10n/l10n_ext.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/text_option_chip.dart';
 import '../domain/entities/lux_models.dart';
@@ -24,36 +25,37 @@ class _LightMeterPageState extends ConsumerState<LightMeterPage> {
   Future<void> _save() async {
     final r = await ref.read(lightMeterProvider.notifier).saveSnapshot(_noteCtrl.text);
     if (!mounted) return;
+    final l = context.l10n;
     if (r.success) {
       final note = r.note ?? '';
+      final lux = r.lux!.toStringAsFixed(1);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            note.isEmpty
-                ? 'Saved: ${r.lux!.toStringAsFixed(1)} lux'
-                : 'Saved: ${r.lux!.toStringAsFixed(1)} lux — $note',
+            note.isEmpty ? l.lightSaved(lux) : l.lightSavedWithNote(lux, note),
           ),
         ),
       );
       _noteCtrl.clear();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Save failed: ${r.error}')),
+        SnackBar(content: Text(l.lightSaveFailed(r.error ?? ''))),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final state = ref.watch(lightMeterProvider);
 
     return state.when(
       loading: () => Scaffold(
-        appBar: AppBar(title: const Text('Light Meter')),
+        appBar: AppBar(title: Text(l.lightTitle)),
         body: const Center(child: CircularProgressIndicator()),
       ),
       unavailable: (error) => Scaffold(
-        appBar: AppBar(title: const Text('Light Meter')),
+        appBar: AppBar(title: Text(l.lightTitle)),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -62,14 +64,13 @@ class _LightMeterPageState extends ConsumerState<LightMeterPage> {
               children: [
                 const Icon(Icons.light_mode, size: 48),
                 const SizedBox(height: 16),
-                const Text(
-                  'No light sensor',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                Text(
+                  l.lightNoSensor,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  error ??
-                      'This device does not report ambient light (TYPE_LIGHT).',
+                  error ?? l.lightNoSensorBody,
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -83,11 +84,11 @@ class _LightMeterPageState extends ConsumerState<LightMeterPage> {
         final scene = LuxScene.fromLux(lux);
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Light Meter'),
+            title: Text(l.lightTitle),
             actions: [
               IconButton(
                 icon: const Icon(Icons.history),
-                tooltip: 'History',
+                tooltip: l.lightHistory,
                 onPressed: () => context.push('/light/history'),
               ),
             ],
@@ -144,20 +145,18 @@ class _LightMeterPageState extends ConsumerState<LightMeterPage> {
               const SizedBox(height: AppDimens.lg),
               TextField(
                 controller: _noteCtrl,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Note (optional)',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: l.noteHint,
                 ),
               ),
               const SizedBox(height: AppDimens.md),
               FilledButton.icon(
                 onPressed: _save,
                 icon: const Icon(Icons.save),
-                label: const Text('Save Snapshot'),
+                label: Text(l.saveSnapshot),
               ),
               const SizedBox(height: AppDimens.xl),
-              const Text('Real-time chart', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: AppDimens.sm),
               Wrap(
                 spacing: AppDimens.sm,
                 children: [

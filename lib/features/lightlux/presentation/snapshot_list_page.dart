@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
+import '../../../core/l10n/l10n_ext.dart';
 import '../../../core/theme/app_theme.dart';
 import 'providers/light_providers.dart';
 
@@ -9,12 +11,13 @@ class SnapshotListPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = context.l10n;
     final async = ref.watch(snapshotListProvider);
     final fmt = DateFormat('yyyy-MM-dd HH:mm:ss');
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Snapshots'),
+        title: Text(l.lightHistory),
         actions: [
           async.maybeWhen(
             data: (items) => items.isEmpty
@@ -32,7 +35,7 @@ class SnapshotListPage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('$e')),
         data: (items) => items.isEmpty
-            ? const Center(child: Text('No snapshots yet'))
+            ? Center(child: Text(l.historyEmpty))
             : ListView.separated(
                 padding: const EdgeInsets.all(AppDimens.lg),
                 itemCount: items.length,

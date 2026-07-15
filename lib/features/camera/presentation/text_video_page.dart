@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/l10n/l10n_ext.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../media/domain/entities/media_job_state.dart';
 import '../../media/presentation/providers/media_job_notifier.dart';
@@ -34,6 +36,7 @@ class _TextVideoPageState extends ConsumerState<TextVideoPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final job = ref.watch(mediaJobProvider);
     ref.listen(mediaJobProvider, (prev, next) async {
       if (next is MediaJobFinished) {
@@ -41,12 +44,11 @@ class _TextVideoPageState extends ConsumerState<TextVideoPage> {
           final uri =
               await ref.read(mediaJobProvider.notifier).saveOutput(next.outputPath!);
           if (context.mounted) {
+            final loc = context.l10n;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  uri != null
-                      ? 'Text video saved'
-                      : 'Encoded but gallery save failed',
+                  uri != null ? loc.textVideoSaved : loc.gallerySaveFailed,
                 ),
               ),
             );
@@ -62,7 +64,7 @@ class _TextVideoPageState extends ConsumerState<TextVideoPage> {
     final running = job is MediaJobRunning;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Text to Video')),
+      appBar: AppBar(title: Text(l.textVideoTitle)),
       body: Padding(
         padding: const EdgeInsets.all(AppDimens.lg),
         child: Column(
@@ -71,13 +73,13 @@ class _TextVideoPageState extends ConsumerState<TextVideoPage> {
               controller: _ctrl,
               maxLines: 4,
               enabled: !running,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Text',
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                labelText: l.textLabel,
               ),
             ),
             const SizedBox(height: AppDimens.lg),
-            Text('Duration: ${_duration.toInt()} s'),
+            Text(l.durationSeconds(_duration.toInt())),
             Slider(
               value: _duration,
               min: 1,
@@ -96,7 +98,7 @@ class _TextVideoPageState extends ConsumerState<TextVideoPage> {
             const Spacer(),
             FilledButton(
               onPressed: running ? null : _gen,
-              child: Text(running ? 'Generating…' : 'Generate video'),
+              child: Text(running ? l.generating : l.generateVideo),
             ),
           ],
         ),

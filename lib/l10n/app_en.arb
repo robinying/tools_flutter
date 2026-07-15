@@ -1,0 +1,180 @@
+{
+  "@@locale": "en",
+  "appTitle": "Tools Flutter",
+  "appName": "Tools",
+  "appTagline": "Media · Camera · Ebook · Light Meter · Face",
+  "sectionCreateEdit": "Create & Edit",
+  "sectionUtilities": "Utilities",
+  "language": "Language",
+  "languageSystem": "System",
+  "languageEnglish": "English",
+  "languageChinese": "中文",
+  "languageFrench": "Français",
+  "languageGerman": "Deutsch",
+  "languageItalian": "Italiano",
+  "languageSpanish": "Español",
+  "languagePortuguese": "Português",
+
+  "featureCamera": "Camera",
+  "featureCameraDesc": "Record, edit, photo, text-to-video, slideshow",
+  "featureMedia": "Media Editor",
+  "featureMediaDesc": "Compress, audio tools, speed, merge, crop…",
+  "featureEbook": "Ebook Converter",
+  "featureEbookDesc": "EPUB to PDF",
+  "featureLight": "Light Meter",
+  "featureLightDesc": "Ambient lux, scene, snapshots",
+  "featureFace": "Face Compare",
+  "featureFaceDesc": "Compare face similarity (geometric)",
+
+  "cameraTitle": "Camera",
+  "cameraPhoto": "Take Photo",
+  "cameraPhotoDesc": "Capture a still with camera",
+  "cameraRecord": "Record Video",
+  "cameraRecordDesc": "Record a video clip",
+  "cameraText": "Text to Video",
+  "cameraTextDesc": "Generate a text card MP4",
+  "cameraSlideshow": "Photo Slideshow",
+  "cameraSlideshowDesc": "Combine photos into a short video",
+  "cameraEditHelpers": "Edit / Trim helpers",
+  "cameraEditHelpersDesc": "Use Media tools for speed, crop, reverse…",
+
+  "photoTitle": "Take Photo",
+  "recordTitle": "Record Video",
+  "textVideoTitle": "Text to Video",
+  "slideshowTitle": "Photo Slideshow",
+  "capture": "Capture",
+  "saving": "Saving…",
+  "record": "Record",
+  "stop": "Stop",
+  "photoSaved": "Photo saved",
+  "videoSaved": "Video saved",
+  "cameraPermissionDenied": "Camera permission denied",
+  "micPermissionDenied": "Microphone permission denied",
+  "noCamera": "No camera",
+  "durationSeconds": "Duration: {seconds} s",
+  "@durationSeconds": {
+    "placeholders": {
+      "seconds": {"type": "int"}
+    }
+  },
+  "textLabel": "Text",
+  "generateVideo": "Generate video",
+  "generating": "Generating…",
+  "textVideoSaved": "Text video saved",
+  "gallerySaveFailed": "Encoded but gallery save failed",
+  "selectPhotos": "Select photos",
+  "photosSelected": "{count} selected",
+  "@photosSelected": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "secondsPerPhoto": "Seconds per photo",
+  "generateSlideshow": "Generate slideshow",
+  "slideshowSaved": "Slideshow saved",
+  "selectAtLeast2Photos": "Select at least 2 photos",
+
+  "mediaEditorTitle": "Media Editor",
+  "selectFile": "Select file",
+  "reselect": "Reselect ({count})",
+  "@reselect": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "options": "Options",
+  "start": "Start",
+  "cancel": "Cancel",
+  "selectAtLeast2Videos": "Select at least 2 videos",
+  "savedUri": "Saved: {uri}",
+  "@savedUri": {
+    "placeholders": {
+      "uri": {"type": "String"}
+    }
+  },
+  "encodedGalleryFailed": "Encoded but gallery save failed: {path}",
+  "@encodedGalleryFailed": {
+    "placeholders": {
+      "path": {"type": "String"}
+    }
+  },
+  "qualityLow": "Low",
+  "qualityMedium": "Medium",
+  "qualityHigh": "High",
+  "mute": "Mute",
+  "keepAudio": "Keep audio",
+
+  "toolVideoCompress": "Video Compress",
+  "toolVideoCompressDesc": "Compress video with FFmpeg",
+  "toolImageCompress": "Image Compress",
+  "toolImageCompressDesc": "Compress images",
+  "toolGif": "Video to GIF",
+  "toolGifDesc": "Convert video to animated GIF",
+  "toolExtractAudio": "Extract Audio",
+  "toolExtractAudioDesc": "Export AAC/M4A track",
+  "toolStripAudio": "Remove Audio",
+  "toolStripAudioDesc": "Export video without sound",
+  "toolTranscode": "Transcode to MP4",
+  "toolTranscodeDesc": "Convert to MP4",
+  "toolSpeed": "Speed Change",
+  "toolSpeedDesc": "0.5x / 1.5x / 2x",
+  "toolReverse": "Reverse Video",
+  "toolReverseDesc": "Play backwards",
+  "toolMerge": "Merge Videos",
+  "toolMergeDesc": "Join clips in order",
+  "toolCrop": "Crop Aspect",
+  "toolCropDesc": "1:1 / 9:16 / 16:9",
+  "toolVolumeFade": "Volume and Fade",
+  "toolVolumeFadeDesc": "Volume + fade in/out",
+
+  "lightTitle": "Light Meter",
+  "lightHistory": "Snapshots",
+  "lightNoSensor": "No light sensor",
+  "lightNoSensorBody": "This device does not report ambient light (TYPE_LIGHT).",
+  "lightSaved": "Saved: {lux} lux",
+  "@lightSaved": {
+    "placeholders": {
+      "lux": {"type": "String"}
+    }
+  },
+  "lightSavedWithNote": "Saved: {lux} lux — {note}",
+  "@lightSavedWithNote": {
+    "placeholders": {
+      "lux": {"type": "String"},
+      "note": {"type": "String"}
+    }
+  },
+  "lightSaveFailed": "Save failed: {error}",
+  "@lightSaveFailed": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+  "noteHint": "Note (optional)",
+  "saveSnapshot": "Save snapshot",
+  "historyEmpty": "No snapshots yet",
+
+  "faceTitle": "Face Compare",
+  "facePickA": "Photo A",
+  "facePickB": "Photo B",
+  "faceCompare": "Compare",
+  "faceBusy": "Comparing…",
+  "faceNoFace": "No face detected",
+  "faceSimilarity": "Similarity: {percent}%",
+  "@faceSimilarity": {
+    "placeholders": {
+      "percent": {"type": "String"}
+    }
+  },
+  "faceDisclaimer": "Geometric similarity only — not biometric ID verification.",
+
+  "ebookTitle": "Ebook Converter",
+  "ebookPick": "Select EPUB",
+  "ebookConvert": "Convert to PDF",
+  "ebookBusy": "Converting…",
+  "ebookStubNote": "Stub conversion: single info page PDF (not full EPUB layout).",
+
+  "jobStarting": "Starting…",
+  "commonError": "Error",
+  "commonOk": "OK"
+}

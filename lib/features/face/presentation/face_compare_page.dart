@@ -1,6 +1,9 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/l10n/l10n_ext.dart';
 import '../../../core/theme/app_theme.dart';
 import 'providers/face_providers.dart';
 
@@ -9,6 +12,7 @@ class FaceComparePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = context.l10n;
     final state = ref.watch(faceCompareProvider);
     final notifier = ref.read(faceCompareProvider.notifier);
 
@@ -16,24 +20,31 @@ class FaceComparePage extends ConsumerWidget {
     final r = state.result;
     if (r != null) {
       resultText = r.when(
-        success: (pct) =>
-            'Similarity: ${pct.toStringAsFixed(1)}% (landmark geometry)',
-        noFace: () => 'Face not detected in one or both images',
+        success: (pct) => l.faceSimilarity(pct.toStringAsFixed(1)),
+        noFace: () => l.faceNoFace,
         error: (m) => m,
       );
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Face Compare')),
+      appBar: AppBar(title: Text(l.faceTitle)),
       body: Padding(
         padding: const EdgeInsets.all(AppDimens.lg),
         child: Column(
           children: [
+            Text(
+              l.faceDisclaimer,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppDimens.lg),
             Row(
               children: [
-                _thumb(state.pathA, 'Photo A', notifier.pickA),
+                _thumb(state.pathA, l.facePickA, notifier.pickA),
                 const SizedBox(width: AppDimens.md),
-                _thumb(state.pathB, 'Photo B', notifier.pickB),
+                _thumb(state.pathB, l.facePickB, notifier.pickB),
               ],
             ),
             const SizedBox(height: AppDimens.lg),
@@ -43,7 +54,7 @@ class FaceComparePage extends ConsumerWidget {
                       state.pathB == null
                   ? null
                   : notifier.compare,
-              child: Text(state.busy ? 'Comparing…' : 'Compare'),
+              child: Text(state.busy ? l.faceBusy : l.faceCompare),
             ),
             const SizedBox(height: AppDimens.lg),
             if (resultText != null)

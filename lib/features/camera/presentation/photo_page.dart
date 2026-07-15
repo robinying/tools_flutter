@@ -2,6 +2,8 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
+
+import '../../../core/l10n/l10n_ext.dart';
 import '../../../core/theme/app_theme.dart';
 import 'providers/gallery_providers.dart';
 
@@ -25,13 +27,15 @@ class _PhotoPageState extends ConsumerState<PhotoPage> {
   Future<void> _init() async {
     final cam = await Permission.camera.request();
     if (!cam.isGranted) {
-      setState(() => _error = 'Camera permission denied');
+      if (!mounted) return;
+      setState(() => _error = context.l10n.cameraPermissionDenied);
       return;
     }
     try {
       final cams = await availableCameras();
       if (cams.isEmpty) {
-        setState(() => _error = 'No camera');
+        if (!mounted) return;
+        setState(() => _error = context.l10n.noCamera);
         return;
       }
       final c = CameraController(cams.first, ResolutionPreset.high, enableAudio: false);
@@ -39,7 +43,7 @@ class _PhotoPageState extends ConsumerState<PhotoPage> {
       if (!mounted) return;
       setState(() => _controller = c);
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     }
   }
 
@@ -52,10 +56,11 @@ class _PhotoPageState extends ConsumerState<PhotoPage> {
       final result =
           await ref.read(galleryRepositoryProvider).saveImage(file.path);
       if (!mounted) return;
+      final l = context.l10n;
       result.fold(
         onSuccess: (uri) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(uri != null ? 'Photo saved' : 'Saved ${file.path}')),
+            SnackBar(content: Text(uri != null ? l.photoSaved : file.path)),
           );
         },
         onFailure: (f) {
@@ -81,8 +86,9 @@ class _PhotoPageState extends ConsumerState<PhotoPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     return Scaffold(
-      appBar: AppBar(title: const Text('Take Photo')),
+      appBar: AppBar(title: Text(l.photoTitle)),
       body: _error != null
           ? Center(child: Text(_error!))
           : _controller == null || !_controller!.value.isInitialized
@@ -94,7 +100,7 @@ class _PhotoPageState extends ConsumerState<PhotoPage> {
                       padding: const EdgeInsets.all(AppDimens.lg),
                       child: FilledButton(
                         onPressed: _busy ? null : _shoot,
-                        child: Text(_busy ? 'Saving…' : 'Capture'),
+                        child: Text(_busy ? l.saving : l.capture),
                       ),
                     ),
                   ],

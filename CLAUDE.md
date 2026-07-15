@@ -11,6 +11,7 @@ Guidance for agents working on this Flutter port of the Tools Android app.
 | Models / sealed state | **Freezed** (`freezed_annotation` + `freezed`) |
 | Architecture | **Feature-first Clean-ish**: thick **Repository + Notifier** (no per-method UseCase by default) |
 | Generated code | **Commit** `*.freezed.dart` (and `*.g.dart` when added) to git |
+| i18n | **gen-l10n** · ARB `lib/l10n/app_en.arb` / `app_zh.arb` · output `lib/l10n/generated/` · `context.l10n` |
 
 ### Layering per feature
 

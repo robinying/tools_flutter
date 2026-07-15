@@ -1,6 +1,8 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/l10n/l10n_ext.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/text_option_chip.dart';
 import '../../media/domain/entities/media_job_state.dart';
@@ -23,9 +25,10 @@ class _SlideshowPageState extends ConsumerState<SlideshowPage> {
   }
 
   Future<void> _run() async {
+    final l = context.l10n;
     if (_paths.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select at least 2 photos')),
+        SnackBar(content: Text(l.selectAtLeast2Photos)),
       );
       return;
     }
@@ -40,6 +43,7 @@ class _SlideshowPageState extends ConsumerState<SlideshowPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final job = ref.watch(mediaJobProvider);
     ref.listen(mediaJobProvider, (prev, next) async {
       if (next is MediaJobFinished) {
@@ -47,12 +51,11 @@ class _SlideshowPageState extends ConsumerState<SlideshowPage> {
           final uri =
               await ref.read(mediaJobProvider.notifier).saveOutput(next.outputPath!);
           if (context.mounted) {
+            final loc = context.l10n;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  uri != null
-                      ? 'Slideshow saved'
-                      : 'Encoded but gallery save failed',
+                  uri != null ? loc.slideshowSaved : loc.gallerySaveFailed,
                 ),
               ),
             );
@@ -68,7 +71,7 @@ class _SlideshowPageState extends ConsumerState<SlideshowPage> {
     final running = job is MediaJobRunning;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Photo Slideshow')),
+      appBar: AppBar(title: Text(l.slideshowTitle)),
       body: Padding(
         padding: const EdgeInsets.all(AppDimens.lg),
         child: Column(
@@ -76,10 +79,14 @@ class _SlideshowPageState extends ConsumerState<SlideshowPage> {
           children: [
             FilledButton(
               onPressed: running ? null : _pick,
-              child: Text(_paths.isEmpty ? 'Select photos' : '${_paths.length} selected'),
+              child: Text(
+                _paths.isEmpty
+                    ? l.selectPhotos
+                    : l.photosSelected(_paths.length),
+              ),
             ),
             const SizedBox(height: AppDimens.lg),
-            const Text('Seconds per photo'),
+            Text(l.secondsPerPhoto),
             Wrap(
               spacing: AppDimens.sm,
               children: [
@@ -114,7 +121,7 @@ class _SlideshowPageState extends ConsumerState<SlideshowPage> {
             const Spacer(),
             FilledButton(
               onPressed: running || _paths.length < 2 ? null : _run,
-              child: Text(running ? 'Generating…' : 'Generate slideshow'),
+              child: Text(running ? l.generating : l.generateSlideshow),
             ),
           ],
         ),

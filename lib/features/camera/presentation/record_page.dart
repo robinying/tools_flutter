@@ -2,6 +2,8 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
+
+import '../../../core/l10n/l10n_ext.dart';
 import '../../../core/theme/app_theme.dart';
 import 'providers/gallery_providers.dart';
 
@@ -25,18 +27,19 @@ class _RecordPageState extends ConsumerState<RecordPage> {
   Future<void> _init() async {
     final cam = await Permission.camera.request();
     final mic = await Permission.microphone.request();
+    if (!mounted) return;
     if (!cam.isGranted) {
-      setState(() => _error = 'Camera permission denied');
+      setState(() => _error = context.l10n.cameraPermissionDenied);
       return;
     }
     if (!mic.isGranted) {
-      setState(() => _error = 'Microphone permission denied');
+      setState(() => _error = context.l10n.micPermissionDenied);
       return;
     }
     try {
       final cams = await availableCameras();
       if (cams.isEmpty) {
-        setState(() => _error = 'No camera');
+        setState(() => _error = context.l10n.noCamera);
         return;
       }
       final c = CameraController(
@@ -64,10 +67,11 @@ class _RecordPageState extends ConsumerState<RecordPage> {
       final result =
           await ref.read(galleryRepositoryProvider).saveVideo(file.path);
       if (!mounted) return;
+      final l = context.l10n;
       result.fold(
         onSuccess: (uri) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(uri != null ? 'Video saved' : file.path)),
+            SnackBar(content: Text(uri != null ? l.videoSaved : file.path)),
           );
         },
         onFailure: (f) {
@@ -90,8 +94,9 @@ class _RecordPageState extends ConsumerState<RecordPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     return Scaffold(
-      appBar: AppBar(title: const Text('Record Video')),
+      appBar: AppBar(title: Text(l.recordTitle)),
       body: _error != null
           ? Center(child: Text(_error!))
           : _controller == null || !_controller!.value.isInitialized
@@ -103,7 +108,7 @@ class _RecordPageState extends ConsumerState<RecordPage> {
                       padding: const EdgeInsets.all(AppDimens.lg),
                       child: FilledButton(
                         onPressed: _toggle,
-                        child: Text(_recording ? 'Stop' : 'Record'),
+                        child: Text(_recording ? l.stop : l.record),
                       ),
                     ),
                   ],

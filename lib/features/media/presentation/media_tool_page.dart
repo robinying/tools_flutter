@@ -2,6 +2,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
+
+import '../../../core/l10n/l10n_ext.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/text_option_chip.dart';
 import '../domain/entities/media_job_state.dart';
@@ -36,10 +38,11 @@ class _MediaToolPageState extends ConsumerState<MediaToolPage> {
   }
 
   Future<void> _start() async {
+    final l = context.l10n;
     if (_paths.isEmpty) return;
     if (widget.type.multi && _paths.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select at least 2 videos')),
+        SnackBar(content: Text(l.selectAtLeast2Videos)),
       );
       return;
     }
@@ -53,6 +56,7 @@ class _MediaToolPageState extends ConsumerState<MediaToolPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final job = ref.watch(mediaJobProvider);
     ref.listen(mediaJobProvider, (prev, next) async {
       if (next is MediaJobFinished) {
@@ -60,12 +64,13 @@ class _MediaToolPageState extends ConsumerState<MediaToolPage> {
           final uri =
               await ref.read(mediaJobProvider.notifier).saveOutput(next.outputPath!);
           if (context.mounted) {
+            final loc = context.l10n;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
                   uri != null
-                      ? 'Saved: $uri'
-                      : 'Encoded but gallery save failed: ${next.outputPath}',
+                      ? loc.savedUri(uri)
+                      : loc.encodedGalleryFailed(next.outputPath!),
                 ),
               ),
             );
@@ -84,7 +89,7 @@ class _MediaToolPageState extends ConsumerState<MediaToolPage> {
         (!widget.type.multi || _paths.length >= 2);
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.type.title)),
+      appBar: AppBar(title: Text(widget.type.titleL10n(l))),
       body: Padding(
         padding: const EdgeInsets.all(AppDimens.lg),
         child: Column(
@@ -92,7 +97,9 @@ class _MediaToolPageState extends ConsumerState<MediaToolPage> {
           children: [
             FilledButton(
               onPressed: running ? null : _pick,
-              child: Text(_paths.isEmpty ? 'Select file' : 'Reselect (${_paths.length})'),
+              child: Text(
+                _paths.isEmpty ? l.selectFile : l.reselect(_paths.length),
+              ),
             ),
             const SizedBox(height: AppDimens.md),
             if (_paths.isNotEmpty)
@@ -101,16 +108,16 @@ class _MediaToolPageState extends ConsumerState<MediaToolPage> {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             const SizedBox(height: AppDimens.lg),
-            Text('Options', style: Theme.of(context).textTheme.titleSmall),
+            Text(l.options, style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: AppDimens.sm),
             Wrap(
               spacing: AppDimens.sm,
               children: [
-                for (final l in QualityLevel.values)
+                for (final q in QualityLevel.values)
                   TextOptionChip(
-                    label: l.labelFor(widget.type),
-                    selected: _level == l,
-                    onTap: () => setState(() => _level = l),
+                    label: q.labelL10n(l, widget.type),
+                    selected: _level == q,
+                    onTap: () => setState(() => _level = q),
                     enabled: !running,
                   ),
               ],
@@ -123,12 +130,12 @@ class _MediaToolPageState extends ConsumerState<MediaToolPage> {
               const SizedBox(height: AppDimens.md),
               OutlinedButton(
                 onPressed: () => ref.read(mediaJobProvider.notifier).cancel(),
-                child: const Text('Cancel'),
+                child: Text(l.cancel),
               ),
             ] else
               FilledButton(
                 onPressed: canStart ? _start : null,
-                child: const Text('Start'),
+                child: Text(l.start),
               ),
           ],
         ),

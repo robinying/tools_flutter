@@ -31,6 +31,21 @@ Flutter 移植版 **Tools** 多功能工具箱（`com.robin.tools` → `com.robi
 | 架构 | Feature-first、偏 Clean：**厚 Repository + Notifier**（默认不做「一方法一 UseCase」） |
 | 媒体原生 | 本地 `android/app/libs/ffmpeg-kit.aar` + `MediaJobService` |
 | 其他插件 | camera · file_picker · image_picker · google_mlkit_face_detection · sqflite · permission_handler · path_provider · gal |
+| 多语言 | **en / zh / fr / de / it / es / pt**（`gen-l10n` + ARB，首页语言菜单，SharedPreferences 记忆） |
+
+### 多语言（i18n）
+
+| 项 | 路径 / 说明 |
+|----|-------------|
+| 配置 | 根目录 `l10n.yaml`，`pubspec.yaml` → `flutter: generate: true` |
+| 文案 | `lib/l10n/app_{en,zh,fr,de,it,es,pt}.arb` |
+| 生成代码 | `lib/l10n/generated/`（`flutter gen-l10n`） |
+| 用法 | `context.l10n.xxx`（见 `lib/core/l10n/l10n_ext.dart`） |
+| 切换 | 首页右上角：跟随系统 / English / 中文 / Français / Deutsch / Italiano / Español / Português |
+
+新增文案：改 ARB → 运行 `flutter gen-l10n`（或任意 `flutter pub get` / build）→ 在 UI 使用 `AppLocalizations`。
+
+**应用图标**：`assets/branding/app_icon.png`（主题紫 `#5B4B8A`，扳手 + 播放三角 + 相机光圈）。Android 已写入各密度 `mipmap-*` 与 API 26 adaptive 图标。
 
 ### Android 构建约束
 
