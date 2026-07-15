@@ -4,7 +4,8 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.8.0
+  # Flutter 3.44.x ships Dart 3.12.x
+  sdk: ^3.12.0
 
 dependencies:
   flutter:

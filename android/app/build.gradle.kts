@@ -20,8 +20,9 @@ fun propOrEnv(propKey: String, envKey: String): String? =
 
 android {
     namespace = "com.robin.tools_flutter"
-    compileSdk = 35
-    ndkVersion = "27.0.12077973"
+    // Flutter 3.44 plugins (camera/image_picker/gal/…) require compileSdk 36 + NDK 28.2
+    compileSdk = 36
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -35,7 +36,7 @@ android {
     defaultConfig {
         applicationId = "com.robin.tools_flutter"
         minSdk = 28
-        targetSdk = 35
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -83,5 +84,6 @@ flutter {
 dependencies {
     implementation(files("libs/ffmpeg-kit.aar"))
     implementation("com.arthenica:smart-exception-java:0.2.1")
-    implementation("androidx.core:core-ktx:1.15.0")
+    // Version aligned with plugins that pull androidx.core 1.18.x under Flutter 3.44
+    implementation("androidx.core:core-ktx:1.18.0")
 }
