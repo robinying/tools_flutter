@@ -2,13 +2,18 @@
 """UI smoke verification for tools_flutter on a connected device."""
 from __future__ import annotations
 
+from pathlib import Path
 import re
 import subprocess
 import sys
 import time
 from dataclasses import dataclass
 
-DEVICE = sys.argv[1] if len(sys.argv) > 1 else "b9bed43d"
+if len(sys.argv) != 2:
+    print(f"Usage: {Path(sys.argv[0]).name} <device-serial>")
+    sys.exit(2)
+
+DEVICE = sys.argv[1]
 PKG = "com.robin.tools_flutter"
 
 

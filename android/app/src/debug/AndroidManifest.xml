@@ -4,8 +4,8 @@
 
     <!--
       Debug-only: allow adb to start media jobs for device verification.
-      Release keeps exported=false. Paths are validated by MediaPathPolicy
-      (app storage + user media roots only; no /proc|/sys|/dev).
+      Release keeps exported=false. Native input shape, path, size, resolution,
+      duration, output, cache, storage, and timeout limits remain enforced.
       Do not distribute debug APKs outside trusted devices.
     -->
     <application>

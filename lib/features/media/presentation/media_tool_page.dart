@@ -27,7 +27,7 @@ class _MediaToolPageState extends ConsumerState<MediaToolPage> {
     await Permission.videos.request();
     final result = await FilePicker.platform.pickFiles(
       type: widget.type.isImage ? FileType.image : FileType.video,
-      allowMultiple: widget.type.multi || widget.type.isImage,
+      allowMultiple: widget.type.multi,
     );
     if (result == null) return;
     setState(() {

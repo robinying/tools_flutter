@@ -1,11 +1,13 @@
 package com.robin.tools_flutter
 
 import android.content.Context
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import java.io.File
 
 /**
- * Input path allow-list for FFmpeg jobs.
- * Blocks /proc /sys /dev and non-readable paths; allows app storage and common user media roots.
+ * Input path and resource policy for FFmpeg jobs.
+ * Blocks system paths and rejects inputs that exceed native media limits.
  */
 object MediaPathPolicy {
 
@@ -33,72 +35,110 @@ object MediaPathPolicy {
     }
 
     fun isBlockedSystemPath(canonicalPath: String): Boolean {
-        val p = canonicalPath
-        return p.startsWith("/proc") ||
-            p.startsWith("/sys") ||
-            p.startsWith("/dev") ||
-            p.startsWith("/acct") ||
-            p == "/" ||
-            p.isEmpty()
+        return canonicalPath.startsWith("/proc") ||
+            canonicalPath.startsWith("/sys") ||
+            canonicalPath.startsWith("/dev") ||
+            canonicalPath.startsWith("/acct") ||
+            canonicalPath == "/" ||
+            canonicalPath.isEmpty()
     }
 
     /**
-     * @return null if ok, otherwise error message
+     * @return null if ok, otherwise an error message safe to show to users.
      */
-    fun validateMediaFile(context: Context, path: String): String? {
-        if (path.isBlank() || path.contains('\u0000')) {
-            return "Invalid path"
+    fun validateJobPaths(context: Context, type: String, paths: List<String>): String? {
+        MediaJobLimits.validateShape(type, paths)?.let { return it }
+        if (type == "textCard") {
+            return MediaJobLimits.validateTextCard(paths[1], paths[2].toIntOrNull())
         }
-        // Placeholder used by textCard UI (not a real input file)
-        if (path == "_") return null
 
-        val file = File(path)
-        if (!file.isFile || !file.canRead()) {
-            return "File not readable: ${file.name}"
+        val inputs = ArrayList<MediaInputFacts>(paths.size)
+        var totalBytes = 0L
+        for (path in paths) {
+            val file = validateMediaFile(context, path) ?: return "Invalid media file"
+            val bytes = file.length()
+            if (bytes > MediaJobLimits.MAX_INPUT_BYTES) {
+                return "Input file is too large"
+            }
+            if (totalBytes > MediaJobLimits.MAX_TOTAL_INPUT_BYTES - bytes) {
+                return "Total input size is too large"
+            }
+            totalBytes += bytes
+            val facts = if (MediaJobLimits.isImageJob(type)) {
+                readImageFacts(file)
+            } else {
+                readMediaFacts(file)
+            } ?: return "Invalid or unsupported media file"
+            inputs.add(facts)
         }
-        val canonical = try {
-            file.canonicalFile.absolutePath
-        } catch (e: Exception) {
-            return "Invalid path: ${e.message}"
-        }
-        if (isBlockedSystemPath(canonical)) {
-            return "Path not allowed"
-        }
-        if (allowedAppRoots(context).any { isUnder(file, it) }) {
-            return null
-        }
-        // User-selected media (scoped storage / shared volumes)
-        if (canonical.startsWith("/storage/") ||
-            canonical.startsWith("/sdcard/") ||
-            canonical.startsWith("/mnt/")
-        ) {
-            return null
-        }
-        return "Path outside allowed storage"
+        return MediaJobLimits.validateMediaFacts(type, inputs)
     }
 
-    fun validateJobPaths(context: Context, type: String, paths: List<String>): String? {
-        when (type) {
-            "textCard" -> {
-                // paths: [placeholder, text, duration]
-                val duration = paths.getOrNull(2) ?: "3"
-                val secs = duration.toIntOrNull()
-                if (secs == null || secs < 1 || secs > 30) {
-                    return "Invalid duration (1–30s)"
-                }
-                return null
-            }
-            "merge", "slideshow" -> {
-                if (paths.isEmpty()) return "No input files"
-                for (p in paths) {
-                    validateMediaFile(context, p)?.let { return it }
-                }
-                return null
-            }
-            else -> {
-                if (paths.isEmpty()) return "No input files"
-                return validateMediaFile(context, paths[0])
-            }
+    private fun validateMediaFile(context: Context, path: String): File? {
+        if (path.isBlank() || path.any { it.code == 0 }) {
+            return null
+        }
+        val file = File(path)
+        if (!file.isFile || !file.canRead()) {
+            return null
+        }
+        val canonical = try {
+            file.canonicalFile
+        } catch (_: Exception) {
+            return null
+        }
+        if (isBlockedSystemPath(canonical.absolutePath)) {
+            return null
+        }
+        if (allowedAppRoots(context).any { isUnder(canonical, it) }) {
+            return canonical
+        }
+        if (canonical.path.startsWith("/storage/") ||
+            canonical.path.startsWith("/sdcard/") ||
+            canonical.path.startsWith("/mnt/")
+        ) {
+            return canonical
+        }
+        return null
+    }
+
+    private fun readImageFacts(file: File): MediaInputFacts? {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, options)
+        if (options.outWidth < 1 || options.outHeight < 1) {
+            return null
+        }
+        return MediaInputFacts(
+            bytes = file.length(),
+            width = options.outWidth,
+            height = options.outHeight,
+            durationMs = null,
+        )
+    }
+
+    private fun readMediaFacts(file: File): MediaInputFacts? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(file.absolutePath)
+            val width = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH,
+            )?.toIntOrNull()
+            val height = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT,
+            )?.toIntOrNull()
+            val duration = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_DURATION,
+            )?.toLongOrNull()
+            MediaInputFacts(
+                bytes = file.length(),
+                width = width,
+                height = height,
+                durationMs = duration,
+            )
+        } catch (_: Exception) {
+            null
+        } finally {
+            retriever.release()
         }
     }
 }

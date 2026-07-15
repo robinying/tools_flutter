@@ -86,4 +86,6 @@ dependencies {
     implementation("com.arthenica:smart-exception-java:0.2.1")
     // Version aligned with plugins that pull androidx.core 1.18.x under Flutter 3.44
     implementation("androidx.core:core-ktx:1.18.0")
+
+    testImplementation("junit:junit:4.13.2")
 }

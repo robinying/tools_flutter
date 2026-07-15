@@ -37,8 +37,14 @@ flutter build apk --debug
 adb install -r build/app/outputs/flutter-apk/app-debug.apk
 adb shell am start -n com.robin.tools_flutter/.MainActivity
 
-# UI smoke (device serial optional)
-python3 scripts/device_verify.py b9bed43d
+# UI smoke (device serial required)
+python3 scripts/device_verify.py <device-serial>
+
+# Native media resource-limit verification (debug APK + adb + host ffmpeg)
+python3 scripts/device_media_limits_verify.py <device-serial>
+
+# Android native media-limit JVM tests
+cd android && ./gradlew :app:testDebugUnitTest
 
 # Debug media job (service exported only in debug)
 adb shell am start-foreground-service \

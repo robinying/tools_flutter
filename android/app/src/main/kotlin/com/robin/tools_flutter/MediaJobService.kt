@@ -13,7 +13,6 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.arthenica.ffmpegkit.FFmpegKit
-import com.arthenica.ffmpegkit.ReturnCode
 import io.flutter.plugin.common.EventChannel
 import java.io.File
 import java.util.concurrent.Executors
@@ -64,18 +63,18 @@ class MediaJobService : Service() {
         executor.execute {
             try {
                 emit(mapOf("phase" to "running", "progress" to 0.05, "message" to "Starting…"))
-                val out = runJob(type, paths, level)
-                when {
-                    cancelRequested -> emit(mapOf("phase" to "failed", "message" to "Cancelled"))
-                    out != null -> emit(
+                when (val outcome = runJob(type, paths, level)) {
+                    is JobOutcome.Success -> emit(
                         mapOf(
                             "phase" to "finished",
                             "progress" to 1.0,
                             "message" to "Done",
-                            "outputPath" to out,
+                            "outputPath" to outcome.outputPath,
                         ),
                     )
-                    else -> emit(mapOf("phase" to "failed", "message" to "FFmpeg failed"))
+                    is JobOutcome.Failure -> emit(
+                        mapOf("phase" to "failed", "message" to outcome.message),
+                    )
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "job failed", e)
@@ -153,81 +152,146 @@ class MediaJobService : Service() {
         }
     }
 
-    private fun runJob(type: String, paths: List<String>, level: String): String? {
-        val outDir = File(cacheDir, "media_out").apply { mkdirs() }
-        pruneMediaCache(outDir)
+    private fun runJob(type: String, paths: List<String>, level: String): JobOutcome {
+        val outDir = File(cacheDir, "media_out")
+        if ((!outDir.exists() && !outDir.mkdirs()) || !outDir.isDirectory) {
+            return JobOutcome.Failure("Unable to prepare output storage")
+        }
+        pruneMediaCache(outDir, reserveForOutput = true)
+        if (!MediaJobExecutionGuard.hasEnoughSpace(outDir, MediaJobLimits.MAX_OUTPUT_BYTES)) {
+            return JobOutcome.Failure("Not enough storage for output")
+        }
+
         val ts = System.currentTimeMillis()
+        val deadlineElapsedMs = android.os.SystemClock.elapsedRealtime() + MediaJobLimits.JOB_TIMEOUT_MS
         emit(mapOf("phase" to "running", "progress" to 0.15, "message" to type))
-        if (cancelRequested) return null
-        Log.i(TAG, "runJob type=$type level=$level paths=$paths")
-
-        val plan = MediaJobCommands.build(type, paths, level, outDir, cacheDir, ts) ?: return null
-
-        if (type == "merge") {
-            emit(mapOf("phase" to "running", "progress" to 0.4, "message" to "Merging…"))
-            val session = FFmpegKit.executeWithArguments(plan.args)
-            if (ReturnCode.isSuccess(session.returnCode)) {
-                plan.listFile?.delete()
-                return plan.outputPath
-            }
-            val listFile = plan.listFile ?: return null
-            val re = MediaJobCommands.mergeReencode(listFile, plan.outputPath)
-            val s2 = FFmpegKit.executeWithArguments(re)
-            listFile.delete()
-            return if (ReturnCode.isSuccess(s2.returnCode)) plan.outputPath else null
+        if (cancelRequested) {
+            return JobOutcome.Failure("Cancelled")
         }
 
-        emit(mapOf("phase" to "running", "progress" to 0.45, "message" to "Encoding…"))
-        if (cancelRequested) return null
-        Log.i(TAG, "ffmpeg args=${plan.args.joinToString(" ")}")
-        val session = FFmpegKit.executeWithArguments(plan.args)
-        if (ReturnCode.isSuccess(session.returnCode)) {
-            Log.i(TAG, "ffmpeg ok -> ${plan.outputPath}")
-            return plan.outputPath
-        }
-
-        Log.e(TAG, "ffmpeg fail code=${session.returnCode}: ${session.allLogsAsString}")
-
-        when (type) {
-            "stripAudio" -> {
-                val retry = MediaJobCommands.retryStripAudio(paths[0], outDir, ts)
-                val s2 = FFmpegKit.executeWithArguments(retry.args)
-                if (ReturnCode.isSuccess(s2.returnCode)) return retry.outputPath
-            }
-            "speed" -> {
-                val retry = MediaJobCommands.retrySpeed(paths[0], level, outDir, ts)
-                val s2 = FFmpegKit.executeWithArguments(retry.args)
-                if (ReturnCode.isSuccess(s2.returnCode)) return retry.outputPath
-            }
-            "textCard" -> {
-                val durationSec = (paths.getOrNull(2) ?: "3").toIntOrNull()?.coerceIn(1, 30) ?: 3
-                val retry = MediaJobCommands.retryTextCardSolid(durationSec, outDir, ts)
-                val s2 = FFmpegKit.executeWithArguments(retry.args)
-                if (ReturnCode.isSuccess(s2.returnCode)) {
-                    Log.i(TAG, "textCard fallback ok -> ${retry.outputPath}")
-                    return retry.outputPath
+        val plan = MediaJobCommands.build(type, paths, level, outDir, cacheDir, ts)
+            ?: return JobOutcome.Failure("Unsupported media job")
+        try {
+            if (type == "merge") {
+                emit(mapOf("phase" to "running", "progress" to 0.4, "message" to "Merging…"))
+                val primary = runPlan(plan, outDir, deadlineElapsedMs)
+                if (primary is MediaJobExecutionGuard.Result.Success) {
+                    pruneMediaCache(outDir)
+                    return JobOutcome.Success(plan.outputPath)
                 }
+                if (primary !is MediaJobExecutionGuard.Result.Failed) {
+                    return JobOutcome.Failure(primary.message())
+                }
+                val listFile = plan.listFile ?: return JobOutcome.Failure("FFmpeg failed")
+                val fallback = runArgs(
+                    MediaJobCommands.mergeReencode(listFile, plan.outputPath),
+                    File(plan.outputPath),
+                    outDir,
+                    deadlineElapsedMs,
+                )
+                if (fallback is MediaJobExecutionGuard.Result.Success) {
+                    pruneMediaCache(outDir)
+                    return JobOutcome.Success(plan.outputPath)
+                }
+                return JobOutcome.Failure(fallback.message())
             }
+
+            emit(mapOf("phase" to "running", "progress" to 0.45, "message" to "Encoding…"))
+            val primary = runPlan(plan, outDir, deadlineElapsedMs)
+            if (primary is MediaJobExecutionGuard.Result.Success) {
+                pruneMediaCache(outDir)
+                return JobOutcome.Success(plan.outputPath)
+            }
+            if (primary !is MediaJobExecutionGuard.Result.Failed) {
+                return JobOutcome.Failure(primary.message())
+            }
+
+            val fallback = when (type) {
+                "stripAudio" -> MediaJobCommands.retryStripAudio(paths[0], outDir, ts)
+                "speed" -> MediaJobCommands.retrySpeed(paths[0], level, outDir, ts)
+                "textCard" -> MediaJobCommands.retryTextCardSolid(paths[2].toInt(), outDir, ts)
+                else -> null
+            } ?: return JobOutcome.Failure("FFmpeg failed")
+            val fallbackResult = runPlan(fallback, outDir, deadlineElapsedMs)
+            if (fallbackResult is MediaJobExecutionGuard.Result.Success) {
+                pruneMediaCache(outDir)
+                return JobOutcome.Success(fallback.outputPath)
+            }
+            return JobOutcome.Failure(fallbackResult.message())
+        } finally {
+            plan.listFile?.delete()
         }
-        return null
     }
 
-    /**
-     * Keep recent outputs (gallery save may still need the file); drop old/oversized cache.
-     */
-    private fun pruneMediaCache(outDir: File) {
-        val files = outDir.listFiles()?.filter { it.isFile } ?: return
+    private fun runPlan(
+        plan: MediaJobCommands.Plan,
+        outDir: File,
+        deadlineElapsedMs: Long,
+    ): MediaJobExecutionGuard.Result = runArgs(
+        plan.args,
+        File(plan.outputPath),
+        outDir,
+        deadlineElapsedMs,
+    )
+
+    private fun runArgs(
+        args: Array<String>,
+        output: File,
+        outDir: File,
+        deadlineElapsedMs: Long,
+    ): MediaJobExecutionGuard.Result = MediaJobExecutionGuard.run(
+        args = args,
+        output = output,
+        outputDir = outDir,
+        deadlineElapsedMs = deadlineElapsedMs,
+        isCancellationRequested = { cancelRequested },
+    )
+
+    /** Keeps recent output within the count and byte budgets. */
+    private fun pruneMediaCache(outDir: File, reserveForOutput: Boolean = false) {
         val now = System.currentTimeMillis()
         val maxAgeMs = 24L * 60 * 60 * 1000
-        val maxFiles = 24
-        // Age-based
-        files.filter { now - it.lastModified() > maxAgeMs }.forEach { it.delete() }
-        // Count-based: keep newest
-        val remaining = outDir.listFiles()?.filter { it.isFile }?.sortedByDescending { it.lastModified() }
-            ?: return
-        if (remaining.size > maxFiles) {
-            remaining.drop(maxFiles).forEach { it.delete() }
+        outDir.listFiles()
+            ?.filter { it.isFile && now - it.lastModified() > maxAgeMs }
+            ?.forEach { it.delete() }
+
+        outDir.listFiles()
+            ?.filter { it.isFile }
+            ?.sortedByDescending { it.lastModified() }
+            ?.drop(24)
+            ?.forEach { it.delete() }
+
+        val byteBudget = if (reserveForOutput) {
+            MediaJobLimits.MAX_CACHE_BYTES - MediaJobLimits.MAX_OUTPUT_BYTES
+        } else {
+            MediaJobLimits.MAX_CACHE_BYTES
         }
+        var retainedBytes = outDir.listFiles()?.filter { it.isFile }?.sumOf { it.length() } ?: 0L
+        outDir.listFiles()
+            ?.filter { it.isFile }
+            ?.sortedBy { it.lastModified() }
+            ?.forEach { file ->
+                if (retainedBytes > byteBudget) {
+                    val bytes = file.length()
+                    if (file.delete()) {
+                        retainedBytes -= bytes
+                    }
+                }
+            }
+    }
+
+    private sealed class JobOutcome {
+        data class Success(val outputPath: String) : JobOutcome()
+        data class Failure(val message: String) : JobOutcome()
+    }
+
+    private fun MediaJobExecutionGuard.Result.message(): String = when (this) {
+        MediaJobExecutionGuard.Result.Cancelled -> "Cancelled"
+        MediaJobExecutionGuard.Result.TimedOut -> "Media job timed out"
+        MediaJobExecutionGuard.Result.OutputTooLarge -> "Output exceeds the allowed size"
+        MediaJobExecutionGuard.Result.InsufficientStorage -> "Not enough storage for output"
+        MediaJobExecutionGuard.Result.Failed -> "FFmpeg failed"
+        MediaJobExecutionGuard.Result.Success -> "Done"
     }
 
     /** EventChannel must be invoked on the main/platform thread. */
